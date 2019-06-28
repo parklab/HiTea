@@ -60,16 +60,32 @@ if [[ -z $re_motif ]]
     printHelpAndExit 0
 fi
 
-## think about these parameters
 if [[ $genome == "hg38" ]]; then
-    index=hg38/indexC/Hg_TEConsensus.fa
-    repbase=hg38/repbase/HumanRepbase.fasta
+    index=hg38/indexC/Consensus.fa
+    repbase=hg38/repbase/Repbase.fasta
     bgAnnotations=hg38/bgAnnotations
     polym=hg38/indexP
     if [[ $re_motif == "GATC" ]]; then 
       sites=hg38/RE/GATC.txt
     elif [[ $re_motif == "AAGCTT" ]]; then
       sites=hg38/RE/AAGCTT.txt
+    elif [[ $re_motif == "CCATGG" ]]; then
+      sites=hg38/RE/CCATGG.txt
+    else
+        echo "RE site file not provided"
+        exit 1
+    fi
+elif [[ $genome == "hg19" ]]; then
+    index=hg19/indexC/Consensus.fa
+    repbase=hg19/repbase/Repbase.fasta
+    bgAnnotations=hg19/bgAnnotations
+    polym=hg19/indexP
+    if [[ $re_motif == "GATC" ]]; then 
+      sites=hg19/RE/GATC.txt
+    elif [[ $re_motif == "AAGCTT" ]]; then
+      sites=hg19/RE/AAGCTT.txt
+    elif [[ $re_motif == "CCATGG" ]]; then
+      sites=hg19/RE/CCATGG.txt
     else
         echo "RE site file not provided"
         exit 1
