@@ -64,11 +64,10 @@ fi
 if [[ $genome == "hg38" ]]; then
     index=hg38/indexC/Hg_TEConsensus.fa
     repbase=hg38/repbase/HumanRepbase.fasta
-    chrsize=hg38/chr.sizes.hg38.txt
     bgAnnotations=hg38/bgAnnotations
     polym=hg38/indexP
     if [[ $re_motif == "GATC" ]]; then 
-      sites=/n/data1/hms/dbmi/park/Dhawal/Genomes/Hg38/hg38_DpnII.txt
+      sites=hg38/RE/GATC.txt
     elif [[ $re_motif == "AAGCTT" ]]; then
       sites=hg38/RE/AAGCTT.txt
     else
@@ -161,6 +160,10 @@ fi
 ## add HiTEA tag line in bam header.
 echo -e "@PG\tID:hitea\tPN:hitea\tCL:hitea -w $workdir -p $ncores -m $re_motif -q $anchor_mapq -o $outprefix -s $clip -d $dist2motif -g $genome -i $inputs\tPP:pairsam\tVN:0.0.1-dev" >> $workdir/headers.sam
 #cat headers.sam > $workdir/headers.sam
+chrsize=$workdir/chr_sizes.txt
+samtools view -H ${inputs[0]} | awk '$1 ~ /SQ/ {print $2"\t"$3}' - > $chrsize
+sed -i 's/SN://g' $chrsize
+sed -i 's/LN://g' $chrsize
 
 ##################################################################################################333
 echo ""
