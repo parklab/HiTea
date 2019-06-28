@@ -1,0 +1,370 @@
+#!/bin/bash
+shopt -s extglob
+
+gap=2  ## internal parameter
+cov=30  ## internal parameter
+chunk=1995M ## internal parameter
+dist2motif=3 ## default parameter
+outprefix=project ## default parameter
+re_motif=GATC ## default parameter
+workdir=$(pwd) ## default parameter
+anchor_mapq=28 ## default parameter
+clip=20 ## default parameter
+genome=hg38 ## default parameter
+help=0
+printHelpAndExit() {
+    echo ""
+    echo ""
+    echo "Usage: ${0##*/} [-w workdir] [-p ncores] [-m re_motif] [-q anchor_mapq] [-o outprefix] [-s clip] [-d dist2motif] [-g genome] [-h help] -i inputs (space separated psam/bam in inverted commas)"
+    echo ""
+    echo ""
+    echo "    -i inputs :          Input file in pairsam format or unsorted-lossless bam format"
+    echo "    -o outprefix :       Output prefix while generating report files (default: project)"
+    echo "    -m re_motif :        Motif sequence for restriction endunuclease used for the assay (e.g. Dpn1II/MboI = GATC) (default: GATC)"
+    echo "    -w workdir:          Working directory where the files are to be written"
+    echo "    -p ncores :          Number of cores to be used (auto-detected)"
+    echo "    -q anchor_mapq :     Mapping quality threshold for repeat anchored mate (default: 28)"
+    echo "    -s clip :            Minimum clip length for detecting insertion (should be >=9bp) (default: 20) "
+    echo "    -d dist2motif :      Cutoff distance to filter out TE insertion calls from the restriction motif (default:3)"
+    echo "    -g genome :          Genome build to be used (default:hg38, available: mm10, hg19)"
+    echo "    -h help :            Display help message"
+    echo ""
+    echo ""
+    exit "$1"
+}
+while getopts "i:o:m:w:g:p:q:s:d:g:h" opt; do
+    case $opt in
+        i) inputs=$OPTARG;;
+        o) outprefix=$OPTARG;;
+        m) re_motif=$OPTARG;;
+        w) workdir=$OPTARG;;
+        p) ncores=$OPTARG;;
+        q) anchor_mapq=$OPTARG;;
+        s) clip=$OPTARG;;
+        d) dist2motif=$OPTARG;;
+        g) genome=$OPTARG;;
+        h) printHelpAndExit 0;;
+        [?]) printHelpAndExit 0;;
+        esac
+done
+if [[ -z $inputs ]]
+    then
+    echo ""
+    echo "****No input provided"
+    printHelpAndExit 0
+fi
+if [[ -z $re_motif ]]
+    then
+    echo ""
+    echo "****No restriction endunuclease motif provided"
+    printHelpAndExit 0
+fi
+
+## think about these parameters
+if [[ $genome == "hg38" ]]; then
+    index=hg38/indexC/Hg_TEConsensus.fa
+    repbase=hg38/repbase/HumanRepbase.fasta
+    chrsize=hg38/chr.sizes.hg38.txt
+    bgAnnotations=hg38/bgAnnotations
+    polym=hg38/indexP
+    if [[ $re_motif == "GATC" ]]; then 
+      sites=/n/data1/hms/dbmi/park/Dhawal/Genomes/Hg38/hg38_DpnII.txt
+    elif [[ $re_motif == "AAGCTT" ]]; then
+      sites=hg38/RE/AAGCTT.txt
+    else
+        echo "RE site file not provided"
+        exit 1
+    fi
+fi
+
+STARTSEC=$(date +%s)
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+workdir=$(echo "$workdir" | sed -e 's/\/$//g')
+ncores=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || echo "$NUMBER_OF_PROCESSORS")
+threads=$(lscpu | sed -n 's/^Core(s) per socket: *//p')
+tot_threads=$(($ncores * $threads))
+tempdir=$workdir/tmp
+mkdir -p $tempdir
+paramlog=${workdir}/${outprefix}.param.log
+echo "" > $paramlog
+if ! [[ -e $paramlog ]]; then
+  echo "No prameter file was printed"
+  exit 1
+fi
+echo ""
+echo ""
+echo "I/O and paramters:"  | tee -a $paramlog 
+echo " -i                   $inputs" | tee -a $paramlog 
+echo " -o                   $outprefix" | tee -a $paramlog 
+echo " -w                   $workdir" | tee -a $paramlog 
+echo " -m                   $re_motif" | tee -a $paramlog 
+echo " -sites               $sites" | tee -a $paramlog 
+echo " -index               $index" | tee -a $paramlog 
+echo " -repbase             $repbase " | tee -a $paramlog 
+echo " -bgAnnotations       $bgAnnotations" | tee -a $paramlog 
+echo " -chr_sizes           $chrsize" | tee -a $paramlog 
+echo " -anchor_mapq         $anchor_mapq" | tee -a $paramlog 
+echo " -clip                $clip" | tee -a $paramlog 
+echo " -gap                 $gap" | tee -a $paramlog 
+echo " -chunksize           $chunk" | tee -a $paramlog 
+echo " -ncores (available)  $ncores" | tee -a $paramlog 
+if [[ "$ncores" -gt 32 ]]; then
+    ncores=32
+fi
+echo " -ncores (used)       $ncores" | tee -a $paramlog 
+echo " -threads (available) $tot_threads" | tee -a $paramlog 
+if [[ "$tot_threads" -gt 8 ]]; then
+    tot_threads=8
+fi
+echo " -threads (used)      $tot_threads" | tee -a $paramlog 
+echo "" | tee -a $paramlog 
+echo "command: hitea -w $workdir -p $ncores -m $re_motif -q $anchor_mapq -o $outprefix -s $clip -d $dist2motif -g $genome -i $inputs"  | tee -a $paramlog 
+echo "" | tee -a $paramlog 
+echo "" | tee -a $paramlog 
+echo  Start-Time `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
+echo ""
+echo ""
+echo ""
+
+#awk '/^>/{if (l!="") print l; print; l=0; next}{l+=length($0)}END{print l}'  $index
+##################################################################################################333
+echo "# Step1 : checking dependancies ... " | tee -a $paramlog 
+if ! [[ -x $(command -v bwa mem) ]]; then
+    echo 'bwa suit not found. make sure to set the path variable right and try again. exiting! ' >&2
+    PATH=$PATH:/n/data1/hms/dbmi/park/Dhawal/Softwares/bwa_0.7.17/
+fi
+if ! [[ -x $(command -v bedtools) ]]; then
+    echo 'bedtools not found. make sure to set the path variable right and try again. exiting! ' >&2
+    exit 1
+fi
+if ! [[ -x $(command -v samtools) ]]; then
+  echo 'samtools not found. make sure to set the path variable right and try again. exiting! ' >&2
+  exit 1
+fi
+if ! [[ -x $(command -v parallel -h) ]]; then
+    echo 'gnu parallel not found. make sure to set the path variable right and try again. exiting! ' >&2   
+    exit 1
+fi
+echo "great!! all dependancies are present!" | tee -a $paramlog 
+echo "" | tee -a $paramlog 
+
+## Extract header file
+if [[ ${inputs[0]} == *.gz ]]; then
+  zcat ${inputs[0]} | head -n 2000 | grep "#samheader: " | sed -e 's/\#samheader: //g' > $workdir/headers.sam      
+elif [[ ${inputs[0]} == *.bam ]]; then
+  samtools view -H ${inputs[0]} > $workdir/headers.sam
+else
+  echo " can't extract headers. Exiting !"
+  exit 1
+fi
+## add HiTEA tag line in bam header.
+echo -e "@PG\tID:hitea\tPN:hitea\tCL:hitea -w $workdir -p $ncores -m $re_motif -q $anchor_mapq -o $outprefix -s $clip -d $dist2motif -g $genome -i $inputs\tPP:pairsam\tVN:0.0.1-dev" >> $workdir/headers.sam
+#cat headers.sam > $workdir/headers.sam
+
+##################################################################################################333
+echo ""
+echo "# Step2 : Splitting input file and generating fastq records ... " | tee -a $paramlog 
+if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]  
+    then
+    for input in $inputs; do
+      xbase=${input##*/}
+      xbase=${xbase%.*}
+      size=$(($(wc -c < "$input") +0))
+      size=$((size /1000000000))
+      if [[ $input == *.gz ]]; then
+         echo "working on .gz formatted psam input ($xbase, size: $size Gb)" 
+         zcat $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -psam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -m "$re_motif"
+      elif [[ $input == *.bam ]]; then
+         echo "working on bam input ($xbase, size: $size Gb)" 
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -m "$re_motif"
+      else
+         echo " can't work with provided input file ${inputs[0]}. Exiting! "
+         exit 1
+      fi
+    done
+    if [[ $? != 0  ]]; then
+      echo "Something went wrong while parsing the input file/s. Exiting! " | tee -a $paramlog 
+      exit 1
+    fi
+else
+    echo "$workdir/$outprefix_1.fq.gz is already created" 
+fi
+
+
+echo "Completed parsing input file" | tee -a $paramlog 
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
+if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]; then    
+    ls $workdir/*temp.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_1.fq.gz
+    ls $workdir/*temp2.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_2.fq.gz
+    size=$(($(wc -c < "$workdir/${outprefix}_1.fq.gz") +0))
+    ## 1.
+    if [[ $size < 10 ]]; then
+      echo "ERROR : Fastq files are either not written/merged properly"
+      exit 1
+    fi
+    rm $workdir/*temp.fq.gz
+    rm $workdir/*temp2.fq.gz
+    ## 2.
+    if ! [[ -e $workdir/${outprefix}.ReadSummary.logs ]]; then
+      perl summary.pl -outprefix $outprefix -wd $workdir
+      size=$(($(wc -c < "$workdir/${outprefix}.ReadSummary.logs") +0))
+      if [[ $size > 0 ]]; then
+        rm $workdir/*_part*.summary.log.ph
+      fi
+    else
+      echo "{outprefix}.ReadSummary.logs file present"
+    fi
+    ## 3.
+    if ! [[ -e $workdir/${outprefix}.parseGNU.log ]]; then
+      cat $workdir/*_temp.parseGNU.log > $workdir/${outprefix}.parseGNU.log
+      size=$(($(wc -c < "$workdir/${outprefix}.parseGNU.log") +0))
+      if [[ $size > 0 ]]; then
+        rm $workdir/*_temp.parseGNU.log
+      fi
+    else
+      echo "{outprefix}.parseGNU.log file present"
+    fi
+else
+   echo "Split parts of $input are already merged"
+fi
+echo "Completed merging back the input parts" | tee -a $paramlog 
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
+
+##################################################################################################333
+echo ""
+echo "" | tee -a $paramlog 
+echo "# Step3 : Extracting clusters  ... " | tee -a $paramlog 
+if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
+    echo " Mapping merged fastq file and extracting clusters"
+    echo " bwa mem -t $tot_threads -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam"
+    echo " bwa mem -t $tot_threads -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam"
+    bwa mem -t $tot_threads -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam
+    bwa mem -t $tot_threads -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam
+    if [[ $? != 0  ]]; then
+      echo "Error in cluster extraction step " | tee -a $paramlog 
+      exit 1
+    fi
+else
+    echo "$workdir/$outprefix.RAM.bed.gz is already created"
+fi
+echo "Completed extracting cluster locations" | tee -a $paramlog 
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
+
+##################################################################################################333
+echo ""
+echo "" | tee -a $paramlog 
+echo "# Step4 : Sorting/merging and cleaning up ..." | tee -a $paramlog 
+if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
+    samtools merge -@ 4 -uf ${workdir}/${outprefix}.RAM.bam $workdir/*.temp.RAM.bam
+    size=$(($(wc -c < "$workdir/$outprefix.RAM.bam") +0))
+    if [[ $size < 100 ]]; then
+      echo "ERROR : RAM bed files are either not written/merged properly" | tee -a $paramlog 
+      exit 1
+    fi
+    samtools sort -@ $tot_threads -m 1G -o $workdir/${outprefix}.RAM.sort.bam $workdir/${outprefix}.RAM.bam
+    samtools index $workdir/${outprefix}.RAM.sort.bam
+    size=$(($(wc -c < "$workdir/${outprefix}.RAM.sort.bam") +0))
+    if [[ $size < 100 ]]; then
+      echo "ERROR : bam file wasn't sorted properly" | tee -a $paramlog 
+      exit 1
+    fi    
+    if [[ $? != 0  ]]; then
+      echo "Error in sorting/mergin step " | tee -a $paramlog 
+      exit 1
+    fi
+    rm $workdir/*temp.RAM.bam
+    rm $workdir/${outprefix}.RAM.bam
+else
+    echo "Split RAM files corresponding to $input are already merged"
+fi
+
+if ! [[ -e $workdir/${outprefix}.sort.merge.clust.bed.gz ]]; then
+    ls $workdir/*temp.clusters.bed | parallel -eta --verbose cat {} >> $workdir/${outprefix}.clusters.bed
+    sort -k1,1 -k2,2n --parallel=$ncores -T $tempdir -s -S 4G $workdir/${outprefix}.clusters.bed > $workdir/${outprefix}.sort.clusters.bed
+    bedtools merge -iobuf 100M -d $gap -s -c 7 -o collapse -i $workdir/${outprefix}.sort.clusters.bed | gzip -c - > $workdir/${outprefix}.sort.merge.clust.bed.gz
+    size=$(($(wc -c < "$workdir/${outprefix}.clusters.bed") +0))
+    if [[ $size < 100 ]]; then
+      echo "ERROR : Clusters bed files are either not written/merged properly" | tee -a $paramlog 
+      exit 1
+    fi
+    rm $workdir/*temp.clusters.bed
+    rm $workdir/${outprefix}.sort.clusters.bed
+    rm $workdir/${outprefix}.clusters.bed
+else
+    echo "Cluster file is already merged and sorted"
+fi
+
+echo "Completed sorting/merging" | tee -a $paramlog 
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
+
+##################################################################################################333
+echo ""
+echo "" | tee -a $paramlog 
+echo "# Step5 : Merging breakpoints and generating report..." | tee -a $paramlog 
+if ! [[ -e $workdir/${outprefix}.ClustObj.ph ]]; then 
+    perl finalize_breaks.pl -in $workdir/${outprefix}.sort.merge.clust.bed.gz -wd $workdir -outprefix $outprefix -algnscore $clip
+    if [[ $? != 0  ]]; then
+      echo "Error in parsing step " | tee -a $paramlog 
+      exit 1
+    fi
+else
+  echo "finalized breakpoint object is already present"
+fi
+
+if ! [[ -e $workdir/${outprefix}.ClustObj_supportRAMcount.ph ]]; then
+    #Rscript randomTELocations.R $outprefix $workdir $bgAnnotations
+    bedtools random -l 1 -n 100000 -g $chrsize > $workdir/${outprefix}_RandomLocs.bed 
+    perl annotate_breaks.pl -in $workdir/${outprefix}.ClustObj.ph -ram $workdir/${outprefix}.RAM.sort.bam -index $index -rand $workdir/${outprefix}_RandomLocs.bed -ncores $ncores -outprefix $outprefix -wd $workdir
+    if [[ $? != 0  ]]; then
+      echo "Error in parsing step " | tee -a $paramlog 
+      exit 1
+    fi
+else
+  echo "annotated breakpoint object is already present"
+fi
+
+
+if ! [[ -e $workdir/${outprefix}.ClustObj_PutativeInsertions.ph ]]; then 
+    perl putative_insertions.pl -in $workdir/${outprefix}.ClustObj_supportRAMcount.ph -polym $polym -index $index -repbase $repbase -bgAnnotations $bgAnnotations -sites $sites -motif $re_motif  -ncores $ncores -outprefix $outprefix -wd $workdir
+    if [[ $? != 0  ]]; then
+      echo "Error in parsing step " | tee -a $paramlog 
+      exit 1
+    fi
+else
+  echo "putative insertion object is already present"
+fi
+
+if ! [[ -e $workdir/${outprefix}.candidate.insertions.bed ]]; then 
+    perl write_insertions.pl -in $workdir/${outprefix}.ClustObj_PutativeInsertions.ph -outprefix $outprefix -wd $workdir -index $index
+    if [[ $? != 0  ]]; then
+      echo "Error in parsing step " | tee -a $paramlog 
+      exit 1
+    fi
+else
+  echo "Candidate insertion report is already generated"
+fi
+
+MYSEC=$(date +%s)
+DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
+echo "Completed generating accessory report files" | tee -a $paramlog 
+echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` 
+echo ""
+echo ""
+echo "###---- Completed! ----------###"
+echo "" | tee -a $paramlog 
+echo ""
+
+Rscript createReport.R $outprefix $workdir
+if [[ $? != 0  ]]; then
+   echo "  {Could not generate HTML report page. One or more R-packages are missing!}"
+fi
+##################################################################################################333 

@@ -1,0 +1,213 @@
+---
+title: "HiTEA run report"
+author: "HiTEA"
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    theme: readable
+    df_print: paged
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+params:
+    dir:
+     value: x
+    outprefix:
+      value : x
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(
+  # fig.path='Figs/',
+  echo=F, # shows code
+  fig.width=14,fig.height=20
+  ,cache=F,message = F, warning = F
+  #, warning=FALSE, message=FALSE
+)
+set.seed(31)
+```
+
+
+# Approach
+- Split list of input files into small chunks
+- Process each chunk in parallel with GNU
+- Stitch the chunks back together to generate compressed .fq.gz file 
+- The .fq.gz file contains filtered Hi-C ambigous reads 
+- Map the reads to TE reference assembly (parameter: -index)
+- Identify cluster locations using the split reads
+- Use ambiguous Hi-C non-split reads to generate a background model
+- Estimate enrichment of reads supporting TE insertion
+- Write down the report (*.candidate.insertion.bed)
+
+
+# Input parameters and time stamps
+- HiTEA was run using following parameters
+```{r parameters, comment=''}
+suppressPackageStartupMessages(library(GenomicRanges,quietly = T))
+suppressPackageStartupMessages(library(data.table,quietly = T))
+suppressPackageStartupMessages(library(knitr,quietly = T))
+suppressPackageStartupMessages(library(kableExtra,quietly = T))
+suppressPackageStartupMessages(library(DT,quietly = T))
+suppressPackageStartupMessages(library(ggplot2,quietly = T))
+suppressPackageStartupMessages(library(EnrichedHeatmap,quietly = T))
+suppressPackageStartupMessages(library(circlize,quietly = T))
+
+file=paste0(params$dir,"/",params$outprefix,".param.log")
+cat(readLines(con = paste0(file)),sep = "\n")
+
+```
+
+# Read summary logs
+- Overall read class and type distribution 
+```{r read_summary}
+file=paste0(params$dir,"/",params$outprefix,".ReadSummary.logs")
+cat(readLines(con = paste0(file)),sep = "\n")
+```
+
+
+# GNU run logs
+- GNU parallel was used for splitting and piping the input file on all available cores
+- The submitted job logs are displayed below
+```{r gnu}
+file=paste0(params$dir,"/",params$outprefix,".parseGNU.log")
+dt = read.delim(paste0(file),header = T)
+#knitr::kable(dt)%>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#  scroll_box(width = "100%", height = "500px")
+datatable(dt, options = list(searching = TRUE,pageLength = 5))
+```
+
+
+# Background modeling information
+- Hi-c ambiguous read (split + unsplit) coverage is calculated at 100,000 random genomic locations and the pre-filtered list of HiTEA insertion calls in a 1kb window
+- Simultaneously, Hi-C read coverage was further calculated along these regions 
+- Based on Hi-C read coverage, the ambiguous Hi-C reads mapping to a given transposable element were modeled using negative binomial law.
+- If Hi-C read coverage was not available for a given bin, but the ambiguous read coverage is observed, then such calls are dropped. 
+
+```{r modeling, warning=F,echo=F,fig.width=12,fig.height=16}
+file=paste0(params$dir,"/",params$outprefix,"_bgModeling.RData")
+load(paste0(file))
+
+nrows <- length(plotdf)
+par(mfrow=c(nrows,3))
+for( f in names(plotdf)){
+  pl <- plotdf[[paste0(f)]]
+  
+  ## smooth scatter plot
+  smoothScatter( pl[pl$dataframe=="bg.ct",]$x, pl[pl$dataframe=="bg.ct",]$y,xlab="Total coverage",ylab="Hi-C ambiguous read coverage",cex.lab=1.5,cex.axis=1.5,cex.main=3)
+    loess.fit = tryCatch({
+      loess.smooth(pl[pl$dataframe=="bg.ct",]$x, pl[pl$dataframe=="bg.ct",]$y)
+    },error = function(e) { return(NA)})
+    if(!is.na(loess.fit)){
+      lines(loess.fit,col="red")
+    }
+  ## mead vs sd plot    
+  plot(pl[pl$dataframe=="bg",]$x,pl[pl$dataframe=="bg",]$y,main=paste0(f),xlab="mean",ylab="sd",cex=1.2,cex.lab=1.5,cex.axis=1.5,cex.main=3,pch=16,col=rgb(1,0,0,0.2))
+    lines(x = pl[pl$dataframe=="bg",]$x,y=sqrt(pl[pl$dataframe=="bg",]$x),col="black")
+  
+  ## P-value histogram  
+  hist(pl[pl$dataframe=="bg.ts",]$x,breaks=20,xlab="p-value",ylab = "frequency",main=paste0(f," (p-values)"),cex.lab=1.5,cex.axis=1.5,cex.main=3)
+}
+
+```
+
+
+
+# Insertion call Summary
+- HiTEA calls are summarized in following table
+- Status 3: High confidence calls with both right and left hand side clip information
+- Status 2: High confidence calls with only single side clip inforamtion available
+- Status 1: Calls overlap with known genomic copies of a given transposable element
+- Status 0: Poor quality calls likely to be false positive (omit them from the analyses)
+```{r calls}
+file=paste0(params$dir,"/",params$outprefix,".candidate.insertions.bed")
+dt = read.delim(paste0(file),header = F,comment.char = "#")
+names(dt) = c("chr","start","end","id","score","strand","TE","status","description","remark")
+#knitr::kable(dt)%>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#  scroll_box(width = "100%", height = "500px")
+datatable(dt, options = list(searching = TRUE,pageLength = 10))
+
+```
+
+
+
+
+# Coverage summary along the HiTEA calls
+- Ambiguous HiC split and unsplit reads are counted in a 6kb window centered at the insertion site
+- Each dot in the heatmap represents start position of the read
+- First plot contains all the high confidence calls (status>=2)
+- While, the second plot contains call that overlap with existing copies of the same TE annotation (status=1)
+
+```{r coverage_plots, warning=F,echo=F,fig.width=12,fig.height=16}
+file=paste0(params$dir,"/",params$outprefix,".CovPlotMatrix.RData")
+load(paste0(file)) #m.spl,m.unspl
+file=paste0(params$dir,"/",params$outprefix,".candidate.insertions.bed")
+dt = read.delim(paste0(file),header = F,comment.char = "#")
+names(dt) = c("chr","start","end","id","score","strand","TE","status","description","remark")
+
+m.spl <- m.spl[match(dt$id,rownames(m.spl)),]
+m.unspl <- m.unspl[match(dt$id,rownames(m.unspl)),]
+
+makematrix <- function(a){
+    a <- as.matrix(a)
+    a = a[,200:800]
+    a[a>300] = 300
+    a <-log2(a+1)
+    a[!is.finite(a)] <- 0
+    dim(a) = dim(a)
+    attr(a, "upstream_index") = 1:300
+    attr(a, "target_index") = 0
+    attr(a, "downstream_index") = 301:600
+    attr(a, "extend") = c(1,1)  # it must be a vector of length two
+    class(a) = c("normalizedMatrix", "matrix")
+    attr(a, "signal_name") = "HiC_Amb_Cov"
+    attr(a, "target_name") = "Insertion"
+    attr(a,"target_is_single_point") = TRUE
+    return(a)
+}
+
+## High confidence TE calls
+dt0 <- dt[dt$status>=2,]
+dt1 <- dt[dt$status==1,]
+
+if(nrow(dt0)>50 & nrow(dt1)>50){
+m0.spl <- m.spl[rownames(m.spl)%in%dt[dt$status>=2,]$id,]
+m0.unspl <- m.unspl[rownames(m.unspl)%in%dt[dt$status>=2,]$id,]
+m0.spl <- makematrix(m0.spl)
+m0.unspl <- makematrix(m0.unspl)
+col_spl = colorRamp2(c(0, max(m0.spl,na.rm=T)), c("white","blue4"))
+col_unspl = colorRamp2(c(0, max(m0.unspl,na.rm=T)), c("white","blue4"))
+
+## Overlapping TE calls  
+m1.spl <- m.spl[rownames(m.spl)%in%dt[dt$status==1,]$id,]
+m1.unspl <- m.unspl[rownames(m.unspl)%in%dt[dt$status==1,]$id,]
+m1.spl <- makematrix(m1.spl)
+m1.unspl <- makematrix(m1.unspl)
+
+
+
+ht_list1 =  Heatmap(dt0$TE, col = structure(2:6, names = levels(as.factor(dt0$TE)) ),
+                    name = "",show_row_names = FALSE, width = unit(1, "mm")) +
+EnrichedHeatmap(m0.spl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize = 30),axis_name_gp = gpar(fontsize = 25), col = col_spl, name =   "#reads(A),log2",top_annotation = HeatmapAnnotation(lines = anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(A) Split reads (Status>=2)")+
+EnrichedHeatmap(m0.unspl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize = 30),axis_name_gp = gpar(fontsize = 25), col = col_spl, name =   "#reads(B),log2",top_annotation = HeatmapAnnotation(lines = anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(B) Unsplit reads (Status>=2)")
+
+
+ht_list2 =  Heatmap(dt1$TE, col = structure(2:6, names = levels(as.factor(dt0$TE)) ),
+                    name = "",show_row_names = FALSE, width = unit(1, "mm")) +
+EnrichedHeatmap(m1.spl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize = 30),axis_name_gp = gpar(fontsize = 25), col = col_spl, name =   "#reads(A),log2",top_annotation = HeatmapAnnotation(lines = anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(A) Split reads (Status==1)")+
+EnrichedHeatmap(m1.unspl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize = 30),axis_name_gp = gpar(fontsize = 25), col = col_spl, name =   "#reads(B),log2",top_annotation = HeatmapAnnotation(lines = anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(B) Unsplit reads (Status==1)")
+
+
+draw(ht_list1,split=dt0$TE,heatmap_legend_side = "bottom", gap = unit(2, "mm"))
+  
+draw(ht_list2,split=dt1$TE,heatmap_legend_side = "bottom", gap = unit(2, "mm"))
+
+}else{
+  cat("Do not have enough calls to make coverage plots\n")
+}
+  
+```
+
