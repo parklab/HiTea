@@ -17,7 +17,7 @@ HiTEA (Hi-C based Transposable Element insertion Analysis) is geared to idenify 
   - Following R packages are required for computation
     - GenomicRanges, data.table, MASS
   - Following optional R packages are required for HTML report generation
-    - rmarkdown, knitr, EnrichedHeatmap17, circlize
+    - rmarkdown, knitr, EnrichedHeatmap, circlize
  
  - Required data files:
  HiTEA requires following reference data files during the run. These files are typically grouped under the directory with name of the genome build (such as hg19 or hg38). Following example illustrates the data directory format. 
