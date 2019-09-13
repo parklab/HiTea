@@ -1,6 +1,5 @@
 #!/usr/bin/perl
-# Author:
-# Dhawal Jain, Dept of Biomedical Informatics, Harvard
+# HiTEA
 
 # This program finalizes breakpoint locations from sorted cluster.bed.gz file
 
