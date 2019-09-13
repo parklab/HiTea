@@ -1,8 +1,6 @@
 #!/usr/bin/perl
-# Author:
-# Dhawal Jain, Dept of Biomedical Informatics, Harvard
-
-# This program merges clusters on opposite strands and identifies Duplicated Target Site (TSD) from the supported reads
+# HiTEA
+# This program annotates the breaks with all related read features
 
 use warnings FATAL => "all";
 use strict;
@@ -105,7 +103,7 @@ my %clusters;
 my %cliplocs;
 my %Locs;
 my %randLocs;
-
+  
 my $watch_run = time();
 my $run_time = $watch_run - our $start_run;
 print "[annotate_breaks] START:\t $run_time seconds\n";
@@ -116,6 +114,8 @@ open (TRANS,"cat $index | grep \">\" | cut -f1 | sort | uniq | sed -e \'s/\>//g\
 %transposons = map { chomp; s/\r//; s/\t//; $_ => 1 } <TRANS>;
 close(TRANS);
 print " transposons being considered in the analyses: " , join(",",keys %transposons),"\n";
+my @TEELEMENTS= keys %transposons;
+push @TEELEMENTS,"unmap";
 
 ## retrieve cluster from the input file
 print " reading observed breaks and generating binary\n";
@@ -127,7 +127,7 @@ foreach my $loc (sort keys %clusters){
 while(my($i,$j) = each %cliplocs){
   $j =~ s/ $//;
   $j =~ s/  / /g;
-  $j = unique($j," ","false");
+  $j = Utilities::unique($j," ","false");
   my @temp= split(" ",$j);  
   @temp = sort{$a <=> $b} @temp;
   $cliplocs{$i} = \@temp;
@@ -154,14 +154,14 @@ while(<FRI>){
        $valnum++;
      }
    }
-   $val = round($val/(10*$valnum),2) if($valnum>0);   ## readlength 100 vs bin size 1000, hence division by 10
+   $val = Utilities::round($val/(10*$valnum),2) if($valnum>0);   ## readlength 100 vs bin size 1000, hence division by 10
    $Locs{$temp[0]."\t".$temp[1]."\t".$temp[1]."\t".$temp[3]."\t.\t".$temp[5]."\t".$val}++;
 }
 close(FRI);
 while(my($i,$j) = each %randLocs){
   $j =~ s/ $//;
   $j =~ s/  / /g;
-  $j = unique($j," ","false");
+  $j = Utilities::unique($j," ","false");
   my @temp= split(" ",$j);  
   @temp = sort{$a <=> $b} @temp;
   $randLocs{$i} = \@temp;
@@ -178,6 +178,24 @@ print  " annotating clusters using bamfile..\n";
 my $clust = count_read_support_from_RAM($ram,\%clusters);
 %clusters =%{$clust};
 store \%clusters, $outprefix.'.ClustObj_supportRAMcount.ph'; #Save 
+
+my $oufile=$outprefix.'.RAM.clusters'; #Save 
+open FOO,">$oufile" or die $!;
+print FOO Dumper %clusters;
+close(FOO);
+
+## generate genomic range objects for the supporting reads
+foreach my $te (@TEELEMENTS){
+  my $te1 = $te;
+  $te=~ s/\/\S*$//g;
+  my $file = $outprefix."_".$te."_supportingreads.txt";
+  my $tegr = $wd."/".$baseoutprefix."_".$te;
+  print qq[ creating GRange..  ];    ##(1)chr,(2)start,(3)end,(4)id,(5)strand,(6)evi,(7)clip, (8)refMapqQ, (9)TEMapScore, (10) TE_strand
+  system( qq[Rscript generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
+  print qq[ cleaning up..  ];    
+  system( qq[rm $file]) == 0 or die qq[ Error in deleting intermetidate files for $te1 \n];            
+  print qq[ Done\n];
+}
 
 $watch_run = time();
 $run_time = $watch_run - $start_run;
@@ -201,7 +219,7 @@ sub count_read_support_from_RAM{
   
   ## write down supporting reads for each TE element in a separate text file => sort => use supporting read counts for modeling
   my %filehandles;
-  foreach my $te (keys %transposons) {
+  foreach my $te (@TEELEMENTS){
     my $te1 = $te;
     $te1=~ s/\/\S*$//g;
     open( my $fh, ">", $outprefix."_".$te1."_supportingreads.txt") or die "Error: Coudln't open file for writing: $!";
@@ -209,122 +227,136 @@ sub count_read_support_from_RAM{
   }
 
   while(<IN>){
-       next if(/^(\#)/);
-       next if(/^(\@)/); 
-       chomp;
-       s/\r//;  
-       my @temp = split(/\t/);
-       next if(!exists($cliplocs{$temp[2]})); 
-       #(0)1226    (1)145     (2)chr17   (3)81936376        (4)0       (5)20S75M  (6)chr1    (7)245532241       (8)0       (9)GTGTGTGCTGCTTGAGCCCTCCACCCCACCCGGCTAATTTTTGGTATCTTTAGTGGAGACGGGGTTTCACTGTGTTAGCCAGGATGGTCTCGATC (10)//>00000011>B/0>///?////////EE/101B10/A/1B11D1B1F1A10BABFA0000A1HHGBB00FGE1BB11A1FAB11111A>>111 NM:i:3  MD:Z:5A21T6A40  MC:Z:88M7S      AS:i:60 XS:i:60 Yt:Z:MM OP:Z:evi=DE,TP,20,100;side=a;clip=81936376;TE=*;mm=NA;sc=0;str=*;cl=-;end=81936451 
-       my $id = $temp[2].$temp[3].$temp[5].$temp[6].$temp[7];
-       my ($evi,$side,$clip,$te,$mm,$sc,$te_str,$cl,$end) = $_ =~ m/OP:Z:evi=(\S+?);side=(\S+?);clip=(\d+?);TE=(\S+?);mm=(\S+?);sc=(\d+?);str=(\S+?);cl=(\S+?);end=(\d+)$/;
-       my ($class) = $_ =~ m/Yt:Z:(\S+)/;
-       my $strand = "+";
-       $strand = "-" if($temp[1] & 0x10); 
-       my $pnts = &findOverlaps($clip,$cliplocs{$temp[2]}, 2000);
-          ## write down events within 2kb of the random or observed breaks
-       if($te ne "*" and $pnts ne ""){ 
-         my @r = split(";",$cl);
-         if(scalar(@r)==0){
-          print "   error in reading TE mapping information, $cl\n";
-         }
-         foreach my $temap (@r){
-           my ($ite,$pos) = $temap =~ m/(\w+):(\d+)/;
-           $ite =~ s/\r//g; $ite =~ s/\t//g; 
-           if($filehandles{$ite}){
-             my $fh = $filehandles{$ite};
-             print $fh "$temp[2]\t$temp[3]\t$end\t$id\t$strand\t$evi\t$clip\t$temp[4]\t$sc\t$te_str\t$pos\n";  #chr,start,end,id,strand,evi,cliploc,refMapqQ,TEMapScore,TE_strand, TE_pos
-           }
-         }
-       }elsif($te ne "*" and $pnts eq ""){ # check random locations 
-         my $alt_pnts = &findOverlaps($clip,$randLocs{$temp[2]}, 2000);
-         if($alt_pnts ne ""){
-           my @r = split(";",$cl);
-           if(scalar(@r)==0){
-             print "   error in reading TE mapping information, $cl\n";
-           }foreach my $temap (@r){
-             my ($ite,$pos) = $temap =~ m/(\w+):(\d+)/;
-             $ite =~ s/\r//g; $ite =~ s/\t//g;
-             if($filehandles{$ite}){
-               my $fh = $filehandles{$ite};
-               print $fh "$temp[2]\t$temp[3]\t$end\t$id\t$strand\t$evi\t$clip\t$temp[4]\t$sc\t$te_str\t$pos\n";  #chr,start,end,id,strand,evi,cliploc,refMapqQ,TEMapScore,TE_strand, TE_pos
-             }
-           }
+    next if(/^(\#)/);
+    next if(/^(\@)/); 
+    chomp;
+    s/\r//;  
+    my @temp = split(/\t/);
+    next if(!exists($cliplocs{$temp[2]})); 
+
+    ## Add deduplication filter on the sorted bam file
+    
+    my $id = $temp[2].$temp[3].$temp[5].$temp[6].$temp[7];
+    my ($evi,$side,$clip,$both,$te,$mm,$sc,$te_str,$end) = $_ =~ m/OP:Z:evi=(\S+?);side=(\S+?);clip=(\d+?);both=(\S+?);TE=(\S+?);mm=(\S+?);sc=(\S+?);str=(\S+?);end=(\d+);$/;
+    my ($class) = $_ =~ m/Yt:Z:(\S+)/;
+    my $strand = "+";
+    $strand = "-" if($temp[1] & 0x10); 
+    #print $_,"\n" if(!defined $clip);
+
+    my $pnts = &findOverlaps($clip,$cliplocs{$temp[2]}, 2000);
+    my @rr = split(",",$te);
+    my @tescores = split(",",$sc);
+    
+    ## write down events within 2kb of the random or observed breaks
+    if($te eq "*" and $pnts ne ""){ 
+      my $fh = $filehandles{unmap};
+      print $fh "$temp[2]\t$temp[3]\t$end\t$id\t$strand\t$evi\t$clip\t$temp[4]\t0\t*\t*\n";  #chr,start,end,id,strand,evi,cliploc,refMapqQ,TEMapScore,TE_strand, TE_pos
+    }elsif($te ne "*" and $pnts ne ""){ 
+      if(scalar(@rr)==0){
+       print "   error in reading TE mapping information, $te\n";
+      }
+      my @testrands= split(",",$te_str);
+      foreach my $i (0..$#rr){
+        my ($ite,$pos) = $rr[$i] =~ m/(\S+):(\d+)/;
+        $ite =~ s/~.*$//; $ite =~ s/\r//g; $ite =~ s/\t//g; 
+        if($filehandles{$ite}){
+          my $fh = $filehandles{$ite};
+          print $fh "$temp[2]\t$temp[3]\t$end\t$id\t$strand\t$evi\t$clip\t$temp[4]\t$tescores[$i]\t$testrands[$i]\t$pos\n";  #chr,start,end,id,strand,evi,cliploc,refMapqQ,TEMapScore,TE_strand, TE_pos
+        }
+      }
+    }elsif($te ne "*" and $pnts eq ""){ # check random locations 
+      my $alt_pnts = &findOverlaps($clip,$randLocs{$temp[2]}, 2000);
+      if($alt_pnts ne ""){
+        if(scalar(@rr)==0){
+          print "   error in reading TE mapping information, $te\n";
+        }
+        my @testrands= split(",",$te_str);
+        foreach my $i (0..$#rr){
+          my ($ite,$pos) = $rr[$i] =~ m/(\S+):(\d+)/;
+          $ite =~ s/~.*$//; $ite =~ s/\r//g; $ite =~ s/\t//g;
+          if($filehandles{$ite}){
+            my $fh = $filehandles{$ite};
+            print $fh "$temp[2]\t$temp[3]\t$end\t$id\t$strand\t$evi\t$clip\t$temp[4]\t$tescores[$i]\t$testrands[$i]\t$pos\n";  #chr,start,end,id,strand,evi,cliploc,refMapqQ,TEMapScore,TE_strand, TE_pos
           }
-       }
-       next if($pnts eq "");
-        
-       my @pnts = split(" ",$pnts);
-       foreach my $cluster_pos (@pnts){
-           my $loc = $temp[2]."\t".$cluster_pos."\t".$side;
-           my $dist = abs($cluster_pos-$clip);
-           if($clusters{$loc} and $dist <= $gap){
-              if($evi=~ m/DE,TP/ and $sc >= $algnscore){ ## reads without any ambiguity about clip sequence
-                 $clusters{$loc}{pos1}{$te} .=$id.",";
-                 $clusters{$loc}{pos1}{TEClust} .=$cl.";";
-              }elsif($evi=~ m/DE,TP/){
-                 $clusters{$loc}{pos1}{unmapped} .=$id.",";
-              }              
-              if($evi=~ m/DE,TP/){
-                 ($clusters{$loc}{pos1}{dist2re}) = $evi=~ m/^\S*,\S*,\S*,(\S*)$/;
-                 $clusters{$loc}{pos1}{seqstring} = $temp[9].",".$temp[5].",".$strand.",".$temp[3];  #seq, cigar, strand, readstart
-                 my $s = Utilities::get_softclipseq($temp[9],$temp[5]);
-                 if(exists $clusters{$loc}{pos1}{clipseqs} and length($s)> length($clusters{$loc}{pos1}{clipseqs})){
-                    $clusters{$loc}{pos1}{clipseqs}= $s;
-                 }elsif(!exists $clusters{$loc}{pos1}{clipseqs}){
-                    $clusters{$loc}{pos1}{clipseqs}= $s;
-                 }
-              }
-              
-              if( exists($clusters{$loc}{pos1}{startspan}) ){ ## lowest start coord       
-                if($clusters{$loc}{pos1}{startspan} > $temp[3]) {
-                   $clusters{$loc}{pos1}{startspan} = $temp[3];
-                }
-              }else{
-                $clusters{$loc}{pos1}{startspan} = $temp[3];
-              }
-              if( exists($clusters{$loc}{pos1}{endspan}) ){ ## highest end coord             
-                if($clusters{$loc}{pos1}{endspan} < $end) {
-                  $clusters{$loc}{pos1}{endspan} = $end;
-                }
-              }else{
-                $clusters{$loc}{pos1}{endspan} = $end;
-              }
-           }elsif($clusters{$loc} and $dist < 50 and $evi=~ m/DE,TP/ ){
-              $clusters{$loc}{pos1}{fuzzyclipped} .=$id.","; 
-           }
-           my $alt_side = "a";
-           $alt_side = "b" if($side eq "a");
-           my $loc1 = $temp[2]."\t".$cluster_pos."\t".$alt_side;
-           if($clusters{$loc1} and $cluster_pos>=$temp[3] and $cluster_pos<=$end and $evi =~ /DE,TP/){
-              my $l = $temp[2]."_".$clip."_".$side."_".$te."|".$id;   
-              $clusters{$loc1}{pos1}{smate} .=$l.",";  ## use this info to tally/write 2nd mate when there is no mapping available for 2nd mate
-              $clusters{$loc1}{pos1}{smate_seqstring} = $temp[9].",".$temp[5].",".$strand.",".$temp[3];  #seq, cigar, strand, readstart
-              if($te eq "*"){
-                $clusters{$loc1}{pos1}{smate_clipseqs} .= Utilities::get_softclipseq($temp[9],$temp[5]).",";  ## capture the supplimentary clip sequences for remapping in the event of PolyA,Unmapped clusters
-              }
-              if($cl ne "-"){
-                 $clusters{$loc1}{pos1}{smateClust} .=$cl.";";
-              }
-           }
-       }
+        }
+      }
+    }
+    next if($pnts eq "");
+     
+    my @pnts = split(" ",$pnts);
+    foreach my $cluster_pos (@pnts){
+      my $loc = $temp[2]."\t".$cluster_pos."\t".$side;
+      my $dist = abs($cluster_pos-$clip);
+      ## case-1
+      if($clusters{$loc} and $dist <= $gap){
+        foreach my $i (0..$#rr){
+          if($evi=~ m/DE,TP/ and $tescores[$i] >= $algnscore){ ## reads without any ambiguity about clip sequence
+            my ($ite,$pos) = $rr[$i] =~ m/(\S+):(\d+)/;
+            $ite =~ s/^\S*?~//;$ite =~ s/\r//g; $ite =~ s/\t//g; 
+            $clusters{$loc}{pos1}{$ite}{num} .=$id.",";
+            $clusters{$loc}{pos1}{$ite}{TESc} .=$tescores[$i].",";
+            $clusters{$loc}{pos1}{$ite}{TEClust} .=$pos.",";
+          }
+        }
+        if($evi=~ m/DE,TP/){
+          ($clusters{$loc}{pos1}{dist2re}) = $evi=~ m/^\S*,\S*,\S*,(\S*)$/;
+          $clusters{$loc}{pos1}{seqstring} = $temp[9].",".$temp[5].",".$strand.",".$temp[3];  #seq, cigar, strand, readstart
+          $clusters{$loc}{pos1}{AllClip} .=$id.";";
+          $clusters{$loc}{pos1}{both} .= $both."," if(!defined $clusters{$loc}{pos1}{both} or $both >0 );          
+          $clusters{$loc}{pos1}{mapq} = $temp[4] if(!defined $clusters{$loc}{pos1}{mapq} or $clusters{$loc}{pos1}{mapq}<$temp[4]);
+          my $s = Utilities::get_softclipseq($temp[9],$temp[5]);
+          if(exists $clusters{$loc}{pos1}{clipseqs} and length($s)> length($clusters{$loc}{pos1}{clipseqs})){
+            $clusters{$loc}{pos1}{clipseqs}= $s;
+           }elsif(!exists $clusters{$loc}{pos1}{clipseqs}){
+            $clusters{$loc}{pos1}{clipseqs}= $s;
+          }
+        }
+        if( exists($clusters{$loc}{pos1}{startspan}) and $clusters{$loc}{pos1}{startspan} > $temp[3] ){ ## lowest start coord       
+          $clusters{$loc}{pos1}{startspan} = $temp[3];
+        }else{
+          $clusters{$loc}{pos1}{startspan} = $temp[3];
+        }
+        if( exists($clusters{$loc}{pos1}{endspan}) and $clusters{$loc}{pos1}{endspan} < $end ){ ## highest end coord             
+           $clusters{$loc}{pos1}{endspan} = $end;
+        }else{
+           $clusters{$loc}{pos1}{endspan} = $end;
+        }
+      }elsif($clusters{$loc} and $dist < 50 and $evi=~ m/DE,TP/ ){
+        $clusters{$loc}{pos1}{fuzzyclipped} .=$id.","; 
+      }
+      ## case-2          
+      my $alt_side = "a";
+      $alt_side = "b" if($side eq "a");
+      my $loc1 = $temp[2]."\t".$cluster_pos."\t".$alt_side;
+      if($clusters{$loc1} and $cluster_pos>=$temp[3] and $cluster_pos<=$end and $evi =~ /DE,TP/){
+        foreach my $i (0..$#rr){
+          my $ite = "*";
+          my $pos=0;
+          ($ite, $pos) = $rr[$i] =~ m/(\S+):(\d+)/ if($rr[$i] ne "*");
+          $ite =~ s/^\S*?~//; $ite =~ s/\r//g; $ite =~ s/\t//g; 
+          my $l = $temp[2]."_".$clip."_".$side."_".$ite."|".$id;   
+          $clusters{$loc1}{smate}{smate} .=$l.",";  ## use this info to tally/write 2nd mate when there is no mapping available for 2nd mate
+          
+          if($ite ne "*"){
+            $clusters{$loc1}{smate}{$ite}{num} .=$id.",";
+            $clusters{$loc1}{smate}{$ite}{TEClust} .=$pos.",";
+            $clusters{$loc1}{smate}{$ite}{TESc} .=$tescores[$i].",";
+          }
+        }
+        if($te eq "*"){
+          $clusters{$loc1}{smate}{clipseqs} .= Utilities::get_softclipseq($temp[9],$temp[5]).",";  ## capture the supplimentary clip sequences for remapping in the event of PolyA,Unmapped clusters
+        }
+        ($clusters{$loc1}{smate}{dist2re}) = $evi=~ m/^\S*,\S*,\S*,(\S*)$/;          
+        $clusters{$loc1}{smate}{AllClip} .=$id.";";
+        $clusters{$loc1}{smate}{seqstring} = $temp[9].",".$temp[5].",".$strand.",".$temp[3];  #seq, cigar, strand, readstart  
+        $clusters{$loc1}{smate}{both} .= $both."," if(!defined $clusters{$loc1}{smate}{both} or $both >0 );          
+        $clusters{$loc1}{smate}{mapq} = $temp[4] if(!defined $clusters{$loc1}{smate}{mapq} or $clusters{$loc1}{smate}{mapq}<$temp[4]);
+      }
+
+    }
   }
   close(IN);
   foreach my $fh(keys %filehandles){close($fh);}
-  
-  
-  ## generate genomic range objects for the supporting reads
-  foreach my $te (keys %transposons){
-    my $te1 = $te;
-    $te=~ s/\/\S*$//g;
-    my $file = $outprefix."_".$te."_supportingreads.txt";
-    my $tegr = $wd."/".$baseoutprefix."_".$te;
-    print qq[ creating GRange..  ];    ##(1)chr,(2)start,(3)end,(4)id,(5)strand,(6)evi,(7)clip, (8)refMapqQ, (9)TEMapScore, (10) TE_strand
-    system( qq[Rscript generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
-    print qq[ cleaning up..  ];    
-    system( qq[rm $file]) == 0 or die qq[ Error in deleting intermetidate files for $te1 \n];            
-    print qq[ Done\n];
-  }
   return(\%clusters);
 }
 
@@ -349,13 +381,13 @@ sub findOverlaps {
     else {
       if(abs($a->[$i] -$x)<=$win){ $pnts .= $a->[$i]." ";}
       if(exists $a->[$i+1] and abs($a->[$i+1] -$x)<=$win){ $pnts .= $a->[$i+1]." ";}
-      $pnts = unique($pnts," ","false");
+      $pnts = Utilities::unique($pnts," ","false");
       return($pnts);
     }
   }
   
   if(exists $a->[$l] and abs($a->[$l] -$x)<=$win){ $pnts .= $a->[$l]." ";}
   if(exists $a->[$l-1] and abs($a->[$l-1] -$x)<=$win){ $pnts .= $a->[$l-1]." ";}
-  $pnts = unique($pnts," ","false");
+  $pnts = Utilities::unique($pnts," ","false");
   return($pnts);
 }
