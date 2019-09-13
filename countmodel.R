@@ -7,7 +7,7 @@ suppressPackageStartupMessages(library(GenomicRanges,quietly = T))
 suppressPackageStartupMessages(library(MASS,quietly = T))
 suppressPackageStartupMessages(library(data.table,quietly = T))
 #args = c("test", "C:/d",0.05,"Alu,L1,SVA,HERVK",28,30)
-#args = c("gm12878_20xab", "C:/d/bgmodel",0.05,"Alu,L1,SVA,HERVK",28,30)
+#args = c("gm12878_10xsb", "C:/d/bgmodel",0.05,"Alu,L1,SVA,HERVK",28,30)
 
 pvalcutoff = as.numeric(args[3])
 tes = as.character(unlist(strsplit(args[4],",")))
@@ -89,37 +89,44 @@ model <- function(x){
 }
 
 cnt <- data.frame(id=p$rname)
-for (f in tes){
+cnta <- data.frame(id=a$rname)
+for (f in c(tes,"PolyA")){
   cat(f,"\n")
   f = gsub("/\\S*$","",f)
   load(paste0(args[2],"/",args[1],"_",f,".RData"))
   gr = gr[-grep("DE,TP",gr$evi)]
   gr <- gr[gr$refMAPQ>=refMAPQ]
+  #gr <- data.table(as.data.frame(gr[,"id"]))
+  #setkeyv(gr, c('id'))
+  #gr <- subset(unique(gr))
+  #gr <- as.data.frame(gr)
+  #gr <- as(gr,"GRanges")
   cnt <- cbind(cnt,countOverlaps(resize(p,4001,"center"),gr,ignore.strand=T ))
+  cnta <- cbind(cnta,countOverlaps(resize(a,4001,"center"),gr,ignore.strand=T ))
 }
-load(paste0(args[2],"/",args[1],"_","PolyA",".RData"))
-gr = gr[-grep("DE,TP",gr$evi)]
-gr <- gr[gr$refMAPQ>=refMAPQ]
-cnt <- cbind(cnt,countOverlaps(resize(p,4001,"center"),gr,ignore.strand=T ))
-p$disc <- rowSums(cnt[,2:6])
-rm(cnt,gr)
+p$disc <- rowSums(cnt[,2:ncol(cnt)])
+a$disc <- rowSums(cnta[,2:ncol(cnta)])
+rm(cnt,gr,cnta)
 
 cnt <- data.frame(id=a$rname)
-for (f in tes){
+GR <- GRanges()
+for (f in c(tes,"PolyA","unmap")){
   cat(f,"\n")
   f = gsub("/\\S*$","",f)
   load(paste0(args[2],"/",args[1],"_",f,".RData"))
-  gr = gr[-grep("DE,TP",gr$evi)]
-  gr <- gr[gr$refMAPQ>=refMAPQ]
-  cnt <- cbind(cnt,countOverlaps(resize(a,4001,"center"),gr,ignore.strand=T ))
+  gr = gr[grep("DE,TP",gr$evi)]
+  start(gr) <- gr$read_start
+  end(gr) <- gr$read_end
+  GR <- c(GR,gr[,"id"])
+  rm(gr)
 }
-load(paste0(args[2],"/",args[1],"_","PolyA",".RData"))
-gr = gr[-grep("DE,TP",gr$evi)]
-gr <- gr[gr$refMAPQ>=refMAPQ]
-cnt <- cbind(cnt,countOverlaps(resize(a,4001,"center"),gr,ignore.strand=T ))
-a$disc <- rowSums(cnt[,2:6])
-rm(cnt,gr)
-
+GR <- data.table(as.data.frame(GR))
+setkeyv(GR, c('id'))
+GR <- subset(unique(GR))
+GR <- as.data.frame(GR)
+GR <- as(GR,"GRanges")
+a$fzcnt <- countOverlaps(resize(a,width(a)+100,"center"),GR,ignore.strand=T )
+rm(cnt,GR)
 
 print.figure=T
 if(print.figure==T){
