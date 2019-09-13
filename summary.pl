@@ -1,9 +1,5 @@
 #!/usr/bin/perl
-
-# Author:
-# Dhawal Jain, Dept of Biomedical Informatics, Harvard
-# This script parses (1) pairsam file and {(2) Read name sorted bam file} to extract discordent reads for assessment of TE-insertions
-
+# HiTEA
 use warnings FATAL => "all";
 use strict;
 use POSIX;
