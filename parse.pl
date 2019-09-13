@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
-# Author:
-# Dhawal Jain, Dept of Biomedical Informatics, Harvard
+# HiTEA
 
 # This script parses Hi-C bam file (duplicate-marked lossless bam) and to generate fastq file for mapping on to the TE assembly 
 
@@ -21,20 +20,41 @@ BEGIN { our $start_run = time(); }
 ###-------------------------------------------------------------------------------------------------------------------------------
 # inputs etc
 ###-------------------------------------------------------------------------------------------------------------------------------
+my %redb;
+$redb{"MboI"}{motif} = "GATC|CTAG";
+$redb{"MboI"}{ligmotif} = "GATCGATC|CTAGCTAG";
+$redb{"MboI"}{mlen} = "4";
+$redb{"MboI"}{ligmotifln} = "8";
+$redb{"DpnII"}{motif} = "GATC|CTAG";
+$redb{"DpnII"}{ligmotif} = "GATCGATC|CTAGCTAG";
+$redb{"DpnII"}{mlen} = "4";
+$redb{"DpnII"}{ligmotifln} = "8";
+$redb{"HindIII"}{motif} = "[A]{0,1}AGCTT|AAGCT[T]{0,1}|[T]{0,1}TCGAA|TTCGA[A]{0,1}";
+$redb{"HindIII"}{ligmotif} = "AAGCTAGCTT|TTCGATCGAA";
+$redb{"HindIII"}{mlen} = "6";
+$redb{"HindIII"}{ligmotifln} = "10";
+$redb{"Arima"}{motif} = "GATC|CTAG|GA[ATGC]{1}T[C]{0,1}|[G]{0,1}A[ATGC]{1}TC|[C]{0,1}T[ATGC]{1}AG|CT[ATGC]{1}A[G]{0,1}";
+$redb{"Arima"}{ligmotif} = "GATCGATC|CTAGCTAG|GA[ATGC]{1}TA[ATGC]{1}TC|GATCA[ATGC]{1}TC|GA[ATGC]{1}TGATC|CT[GATC]{1}AT[AGTC]{1}AG|CT[ATGC]{1}ACTAG|CTAGT[ATGC]{1}AG";
+$redb{"Arima"}{mlen} = "5";
+$redb{"Arima"}{ligmotifln} = "8";
+$redb{"NcoI"}{motif} = "[C]{0,1}CATGG|CCATG[G]{0,1}|[G]{0,1}GTACC|GGTAC[C]{0,1}";
+$redb{"NcoI"}{ligmotif} = "CCATGCATGG|GGTACGTACC";
+$redb{"NcoI"}{mlen} = "6";
+$redb{"NcoI"}{ligmotifln} = "10";
+
 my $psam = "";
 my $bam = "";
 my $wd = "";
+my $enzyme = ""; 
+my $min_mapq = "";
+my $clip = ""; 
 my $outprefix = "project"; #default 
-my $min_mapq = 28;  #default
-my $clip = 20; #default 
-my $dist2re =3;  #default
-my $motif = "GATC"; #default 
 my $help = 0;
-my $subset_fraction=0.33;
+my $subset_fraction=1;
 Getopt::Long::GetOptions(
   'psam=s'           => \$psam,
   'bam=s'            => \$bam,
-  'm=s'              => \$motif,
+  'e=s'              => \$enzyme,
   'wd:s'             => \$wd,
   'outprefix:s'      => \$outprefix,
   'q=s'              => \$min_mapq,
@@ -44,17 +64,17 @@ Getopt::Long::GetOptions(
   'h'                => \$help,
 ) or die "Incorrect input! Use -h for usage.\n";
 if ($help) {
-  print "\nUsage: perl parse.pl -psam [FILE_PATH] -bam [FILE_PATH] -m [STRING] -outprefix [STRING] -wd [WORK_DIR] -clip [INT] -subset_fraction [Fraction] -q [INT] \n\n";
+  print "\nUsage: perl parse.pl -psam [FILE_PATH] -bam [FILE_PATH] -e [STRING] -outprefix [STRING] -wd [WORK_DIR] -clip [INT] -subset_fraction [Fraction] -q [INT] \n\n";
   print "This script parses pairsam file to extract discordent reads for assessment of TE-insertions. \n\n";
   print "Options (required*):\n";
   print "   -psam             Input file (pairsam format)\n";
   print "   -bam              Input file (either lossless bam format or WGS bam)\n";
-  print "Options (optional):\n";
-  print "   -m                RE Motif sequence (default:GATC)\n";
-  print "   -outprefix        Output file PREFIX (default: project)\n";
-  print "   -wd               Working directory (default: ~)\n";
+  print "   -e                RE used in the Hi-C experiment\n";
   print "   -q                Minimum mapping quality for the reference alignment. This value is used to determine repeat anchored mates in the genome (default:28) \n";
   print "   -clip             Minimum softclipped read length for mapping the reads to the TE assembly (default:20)\n";
+  print "Options (optional):\n";
+  print "   -outprefix        Output file PREFIX (default: project)\n";
+  print "   -wd               Working directory (default: ~)\n";
   print "   -help|-h          Display usage information.\n";
   print "Default outputs:\n";
   print "    Writes fastq file with discordent reads \n\n\n";
@@ -100,15 +120,12 @@ my %chrs =(
 my $watch_run=0;
 my $run_time=0;
 my %flags;
-
 ############# (1) locate clipped and RAM readssssss, print them to fastq files
 #############     print fragment ends and pair-orientations  
 my $outfq=$outprefix.".temp.fq.gz";  ## softclipped read sequences
 open(O1, "| gzip -c - > $outfq") or die "can't create $outfq";
 my $outfq2=$outprefix.".temp2.fq.gz";   ## non-clip reads
 open(O2, "| gzip -c - > $outfq2") or die "can't create $outfq2";
-#my $out3=$outprefix.".temp3.txt.gz";   ## non-clip reads
-#open(O3, "| gzip -c - > $out3") or die "can't create $out3";
 
 $watch_run = time();
 $run_time = $watch_run - our $start_run;
@@ -120,7 +137,6 @@ if($bam ne "" and $psam eq ""){
   print " ERROR: Incorrect input file specified. Exiting!! \n";
   exit 1;
 }
-
 my $sumObj=$outprefix.".summary.log.ph"; ## store summary info
 store \%flags, $sumObj;
 
@@ -130,7 +146,6 @@ print " $run_time seconds\t lines in the file: $lines\n";
 
 close(O1);
 close(O2);
-#close(O3);
 exit 0;
 
 ###-------------------------------------------------------------------------------------------------------------------------------
@@ -155,7 +170,7 @@ sub bam_read{
   if($file=~ m/.bam/){
      open IN,"samtools view -@ 8 $file|" or next "Can't open file $file";
   }else{
-     print "input is in sam format\n";
+     print "input is pipe/sam\t";
      open IN,"$file" or next "Can't open file $file"; 
   }
   
@@ -190,7 +205,7 @@ sub bam_read{
     
     if($oid ne $sam[0] or eof){
        my $is_next=0;
-       $is_next=1 if(rand()>$subset_fraction);  ###################################### TEMPORARY
+       #$is_next=1 if(rand()>$subset_fraction);  ###################################### TEMPORARY
        
        if($is_next==0){
          $flags{"raw"}{"counts"}{"total"}++;
@@ -299,6 +314,7 @@ sub write_fq_from_bam{
          $flags{"ori"}{$logdist}{$strand2.$strand1}++;
       }
     }
+    #if($r1_type eq "UU" and $read1[4]>=$min_mapq and $read2[4]>=$min_mapq){return(1);}
     return(1);
   } 
 
@@ -382,31 +398,24 @@ sub write_fq_from_bam{
   my $addum2 = "-";
   if($evi1[0] eq "IE" and $evi1[1] eq "TP"){
       $addum1 = join("\x{019}",@read2);
-      $addum1 .= "\x{019}OP:Z:evi=IE,FP,".join(",",@evi2[2..3]).";side=".$evi2[4].";clip=".$evi2[6];
+      $addum1 .= "\x{019}OP:Z:evi=IE,FP,".join(",",@evi2[2..3]).";side=".$evi2[4].";clip=".$evi2[6].";both=".$evi2[8];
       $addum1 = "-" if(!$chrs{$read2[2]});
   }else{
       $addum1 = join("\x{019}",@read1);
-      $addum1 .= "\x{019}OP:Z:evi=".join(",",@evi1[0..3]).";side=".$evi1[4].";clip=".$evi1[6]; 
+      $addum1 .= "\x{019}OP:Z:evi=".join(",",@evi1[0..3]).";side=".$evi1[4].";clip=".$evi1[6].";both=".$evi1[8]; 
       $addum1 = "-" if(!$chrs{$read1[2]});    
   }
 
   if($evi2[0] eq "IE" and $evi2[1] eq "TP"){ 
       $addum2 = join("\x{019}",@read1);
-      $addum2 .= "\x{019}OP:Z:evi=IE,FP,".join(",",@evi1[2..3]).";side=".$evi1[4].";clip=".$evi1[6];
+      $addum2 .= "\x{019}OP:Z:evi=IE,FP,".join(",",@evi1[2..3]).";side=".$evi1[4].";clip=".$evi1[6].";both=".$evi1[8];
       $addum2 = "-" if(!$chrs{$read1[2]});
   }else{
       $addum2 = join("\x{019}",@read2);
-      $addum2 .= "\x{019}OP:Z:evi=".join(",",@evi2[0..3]).";side=".$evi2[4].";clip=".$evi2[6];
+      $addum2 .= "\x{019}OP:Z:evi=".join(",",@evi2[0..3]).";side=".$evi2[4].";clip=".$evi2[6].";both=".$evi2[8];
       $addum2 = "-" if(!$chrs{$read2[2]});
   }
   
-  #print join("\t",@read1),"\n";
-  #print join ("\t",@evi1),"\n";
-  #print $addum1,"\n\n";
-  #print join("\t",@read2),"\n";
-  #print join ("\t",@evi2),"\n";
-  #print $addum2,"\n\n";
-
   undef(@read1) if($addum1 eq "-");
   undef(@read2) if($addum2 eq "-");      
   undef(@read1) if(@read1 and $num_N1>1);
@@ -429,10 +438,10 @@ sub write_fq_from_bam{
          $flags{"reported"}{"read1"}{$evi1[0].",".$evi1[1]}++;
          if($evi1[0] eq "DE" and $evi1[1] eq "TP"){
            print O1 "@".$addum1."\n".$evi1[5]."\n+\n".$evi1[7]."\n"; 
-           if(scalar(@evi1)==16 and $evi1[8] eq "DE" and $evi1[9] eq "TP"){
+           if(scalar(@evi1)==18 and $evi1[9] eq "DE" and $evi1[10] eq "TP"){
               $addum1 = join("\x{019}",@read1);
-              $addum1 .= "\x{019}OP:Z:evi=".join(",",@evi1[8..11]).";side=".$evi1[4].";clip=".$evi1[6];
-              print O1 "@".$addum1."\n".$evi1[13]."\n+\n".$evi1[15]."\n";            
+              $addum1 .= "\x{019}OP:Z:evi=".join(",",@evi1[9..12]).";side=".$evi1[13].";clip=".$evi1[15].";both=".$evi1[17];
+              print O1 "@".$addum1."\n".$evi1[14]."\n+\n".$evi1[16]."\n";            
            }
          }elsif($is_chimera eq "true"){
            print O2 "@".$addum1."\n".$evi1[5]."\n+\n".$evi1[7]."\n"; 
@@ -443,10 +452,10 @@ sub write_fq_from_bam{
         $flags{"reported"}{"read2"}{$evi2[0].",".$evi2[1]}++;
         if($evi2[0] eq "DE" and $evi2[1] eq "TP"){
           print O1 "@".$addum2."\n".$evi2[5]."\n+\n".$evi2[7]."\n";
-          if(scalar(@evi2)==16 and $evi2[8] eq "DE" and $evi2[9] eq "TP"){
+          if(scalar(@evi2)==18 and $evi2[9] eq "DE" and $evi2[10] eq "TP"){
               $addum2 = join("\x{019}",@read2);
-              $addum2 .= "\x{019}OP:Z:evi=".join(",",@evi2[8..11]).";side=".$evi2[4].";clip=".$evi2[6];
-             print O1 "@".$addum2."\n".$evi2[13]."\n+\n".$evi2[15]."\n";            
+              $addum2 .= "\x{019}OP:Z:evi=".join(",",@evi2[9..12]).";side=".$evi2[13].";clip=".$evi2[15].";both=".$evi2[17];
+             print O1 "@".$addum2."\n".$evi2[14]."\n+\n".$evi2[16]."\n";            
           }
         }elsif($is_chimera eq "true"){
              print O2 "@".$addum2."\n".$evi2[5]."\n+\n".$evi2[7]."\n";
@@ -457,7 +466,11 @@ sub write_fq_from_bam{
 
 sub check_REMotif_presence_and_gain {
   my ($seq,$qual,$cigar,$chr,$start,$strand,$mapq) = @_;
-  my @evi = ("","","","","","","","");  ## (0)DE,(1)TP,(2)SClen,(3)dist2RE, (4)clip-sidedness, (5)seq, (6)cliploc, (7)qual
+  my $single= "0";
+  my $check="F";
+  my @evi = ("","","","","","","","",$single);  ## (0)DE,(1)TP,(2)SClen,(3)dist2RE, (4)clip-sidedness, (5)seq, (6)cliploc, (7)qual, (8)double/single clip
+                                                ## (9)DE,(10)TP,(11)SClen,(12)dist2RE, (13)clip-sidedness, (14)seq, (15)cliploc, (16)qual, (17)double/single clip
+  
   ## checks
   if(!defined $seq or !defined $qual){
     print " ISSUE: $cigar,$chr,$start,$strand,$mapq\n";
@@ -467,7 +480,7 @@ sub check_REMotif_presence_and_gain {
     exit 1;
   }
   if($cigar eq "*" or $chr eq "*"){  ## unmapped read
-     @evi = ("IE","TP",0,"-","-",$seq,$start,$qual);
+     @evi = ("IE","TP",0,"-","-",$seq,$start,$qual,$single);
      return(\@evi);
   }
 
@@ -477,36 +490,34 @@ sub check_REMotif_presence_and_gain {
   $b=0 if(!defined($b) || $b eq"");  ## right hand side   
   if($a < $clip and $b < $clip){
     if($mapq < $min_mapq){   
-       @evi = ("IE","TP",0,"-","-",$seq,$start,$qual);  ## this will be kept
+       @evi = ("IE","TP",0,"-","-",$seq,$start,$qual,$single);  ## this will be kept
        return(\@evi);
     }else{
-      @evi = ("IE","FP",0,"-","-",$seq,$start,$qual);  ## this will be discarded ultimately
+      @evi = ("IE","FP",0,"-","-",$seq,$start,$qual,$single);  ## this will be discarded ultimately
       return(\@evi); 
     }    
   } 
   
-  my $motif_len = length($motif);
   my $dista="";
   my $distb="";  
   my $xa=0;
   my $xb=0;
-  if($a>=$clip){
-    $dista = get_dist2RE_fromSeq($seq,$motif,$a,"a");
+  if($a>=10){
+    $dista = get_dist2RE_fromSeq($seq,$enzyme,$a);
     $xa = Utilities::get_clip_coordV1($start,$strand,$cigar,"lhs");
   }
-  if($b>=$clip){
-    $distb = get_dist2RE_fromSeq($seq,$motif,(length($seq)-$b),"b");
+  if($b>=10){
+    $distb = get_dist2RE_fromSeq($seq,$enzyme,(length($seq)-$b+1));
     $xb = Utilities::get_clip_coordV1($start,$strand,$cigar,"rhs");
   }
+  $check="T" if($a>=10 and $b>=10 and $dista>=10 and $distb>=10);
 
   if($a>=$clip and $b>=$clip){ ## return both clip locations 
      my @aa;
      my @ab;
      
-     if($a>=$clip){
-        $aa[0] = "DE";
-     }
-     if($dista < $dist2re){
+     $aa[0] = "DE" if($a>=$clip);
+     if($dista < $clip){
         $aa[1] = "FP";
       }else{
         $aa[1] = "TP";
@@ -517,11 +528,11 @@ sub check_REMotif_presence_and_gain {
      $aa[5] = substr($seq,0,$a);
      $aa[6] = $xa;
      $aa[7] = substr($qual,0,$a);
-
-     if($b>=$clip){
-        $ab[0] = "DE";
-     }
-     if($distb < $dist2re){
+     $aa[8] = $single;
+     $aa[8] = $xb if($check eq "T" ); 
+     
+     $ab[0] = "DE" if($b>=$clip);
+     if($distb < $clip){
         $ab[1] = "FP";
       }else{
         $ab[1] = "TP";
@@ -532,7 +543,9 @@ sub check_REMotif_presence_and_gain {
      $ab[5] = substr($seq,-$b);;
      $ab[6] = $xb;
      $ab[7] = substr($qual,-$b);
-
+     $ab[8] = $single;
+     $ab[8] = $xa if($check eq "T" ); 
+  
      if($aa[1] eq "TP" and $ab[1] eq "FP"){
         @evi = @aa;
      }elsif($aa[1] eq "FP" and $ab[1] eq "TP"){
@@ -543,10 +556,8 @@ sub check_REMotif_presence_and_gain {
        @evi = (@ab,@aa);
      }  
   }elsif($a>=$clip and $b<$clip){
-    if($a>=$clip){
-        $evi[0] = "DE";
-    }
-    if($dista<$dist2re){
+    $evi[0] = "DE" if($a>=$clip);
+    if($dista<$clip){
       $evi[1] = "FP";
      }else{
       $evi[1] = "TP";
@@ -557,11 +568,11 @@ sub check_REMotif_presence_and_gain {
     $evi[5] = substr($seq,0,$a);
     $evi[7] = substr($qual,0,$a);
     $evi[6] = $xa;
+    $evi[8] = $single;
+    $evi[8] = $xb if($check eq 'T');
   }elsif($b>=$clip and $a<$clip){
-    if($b>=$clip){
-        $evi[0] = "DE";
-    }
-    if($distb<$dist2re){
+    $evi[0] = "DE" if($b>=$clip);
+    if($distb<$clip){
       $evi[1] = "FP";
      }else{
       $evi[1] = "TP";
@@ -572,135 +583,48 @@ sub check_REMotif_presence_and_gain {
     $evi[5] = substr($seq,-$b);
     $evi[7] = substr($qual,-$b);
     $evi[6] = $xb;
+    $evi[8] = $single;
+    $evi[8] = $xa if($check eq 'T');
   }
   return(\@evi);
 }
 
 sub get_dist2RE_fromSeq{
-  my ($seq,$motif,$clip,$side) = @_;
+  my ($seq,$enzyme,$clip) = @_;
   my $dist = 500;
-  my $offset = 0;
   ## If clip seq contains RE motif, it should be atleast $clip bp away from the clipped position in the read
   ## This ensures removal of Hi-C chimera derived through unmapped clip reads
      
-  if($motif eq "" or !defined $motif){
+  if($enzyme eq "" or !defined $enzyme or !exists $redb{$enzyme}){
     print " Motif not defined in Dist2RE_fromSeq sub!! exiting! \n";
     exit 1;
-  }elsif($motif eq "GATC"){
-     my $cnt=() = $seq =~ /GATCGATC/g;
-     return("0") if($cnt>1); 
-     return($dist) if($cnt == 0);
-     my $c = index($seq, "GATCGATC",0);
-     return($dist) if($c == -1);
-     $clip -=1 if($clip !=0); 
-     if( ($c-$dist2re) <= $clip and ($c+8+$dist2re) >= $clip ){
+  }
+  if(exists $redb{$enzyme}){
+     my $cnt=() = $seq =~ /$redb{$enzyme}{ligmotif}/g;
+     return(0) if($cnt>1); 
+     
+     if($cnt==1){
+       my $c = 0;
+       if($seq =~ m/$redb{$enzyme}{ligmotif}/){
+         $c = $c+length($`) if(defined $`);
+       }
+       if( $c <= $clip and ($c+ $redb{$enzyme}{ligmotifln}) >= $clip ){
         $dist = 0;     
-     }elsif($c>$clip){
+       }elsif($c> $clip){
         $dist = $c - $clip;
-        $offset = 1;
-     }else{
-        $dist = ($clip - $c - 8);
-        $offset = 2;
+       }else{
+        $dist = ($clip - $c - $redb{$enzyme}{ligmotifln});
+       }
      }
-     my $mlen=length($motif);
+     my $mlen=$redb{$enzyme}{mlen};
      my $slen = length($seq);
-     if( ($mlen+$clip) <= $slen and $clip>=$mlen){
-        my $sq = substr($seq,($clip-$mlen),($clip+$mlen));
-        if($sq =~ m/GATC/){
+     #print "$cnt\t$mlen\t$slen\t$clip\t$dist\n";
+     if( $dist> $mlen and ($mlen+$clip) <= $slen and $clip>=$mlen){
+        my $sq = substr($seq,($clip-$mlen-1),(2*$mlen + 1));
+        if($sq =~ m/$redb{$enzyme}{motif}/){
+          #print $sq ,"\t",length $`,"\n";
           $dist=0;
         }
-     }
-     if($side eq "a" and $offset == 2 and $dist<=$clip){
-        $dist=0;
-     }elsif($side eq "b" and $offset == 1 and $dist<=$clip){
-        $dist=0;
-     }
-  }elsif($motif eq "AAGCTT"){
-     my $cnt=() = $seq =~ /AAGCTAGCTT/g;
-     return("0") if($cnt>1); 
-     return($dist) if($cnt == 0);
-     my $c = index($seq, "AAGCTAGCTT",0);
-     return($dist) if($c == -1);
-     $clip -=1 if($clip !=0); 
-     if( ($c-$dist2re) <= $clip and ($c+10+$dist2re) >= $clip ){
-        $dist = 0;     
-     }elsif($c>$clip){
-        $dist = $c - $clip;
-        $offset = 1;
-     }else{
-        $dist = ($clip - $c - 10);
-        $offset = 2;
-     }     
-     my $mlen=length($motif);
-     my $slen = length($seq);
-     if( ($mlen+$clip) <= $slen and $clip>=$mlen){
-        my $sq = substr($seq,($clip-$mlen),($clip+$mlen));
-        if($sq =~ m/AAGCTT/){
-          $dist=0;
-        }
-     }
-     if($side eq "a" and $offset == 2 and $dist<=$clip){
-        $dist=0;
-     }elsif($side eq "b" and $offset == 1 and $dist<=$clip){
-        $dist=0;
-     }
-  }elsif($motif eq "GCGGCCGC"){
-     my $cnt=() = $seq =~ /GCGGCCGGCCGC/g;
-     return("0") if($cnt>1); 
-     return($dist) if($cnt == 0);
-     my $c = index($seq, "GCGGCCGGCCGC",0);
-     return($dist) if($c == -1);
-     $clip -=1 if($clip !=0); 
-     if( ($c-$dist2re) <= $clip and ($c+12+$dist2re) >= $clip ){
-        $dist = 0;     
-     }elsif($c>$clip){
-         $offset = 1;
-         $dist = $c - $clip;
-     }else{
-         $offset = 2;
-        $dist = ($clip - $c - 12);
-     }     
-     my $mlen=length($motif);
-     my $slen = length($seq);
-     if( ($mlen+$clip) <= $slen and $clip>=$mlen){
-        my $sq = substr($seq,($clip-$mlen),($clip+$mlen));
-        if($sq =~ m/GCGGCCGC/){
-          $dist=0;
-        }
-     }
-     if($side eq "a" and $offset == 2 and $dist<=$clip){
-        $dist=0;
-     }elsif($side eq "b" and $offset == 1 and $dist<=$clip){
-        $dist=0;
-     }
-  }elsif($motif eq "CCATGG"){
-     my $cnt=() = $seq =~ /CCATGCATGG/g;
-     return("0") if($cnt>1); 
-     return($dist) if($cnt == 0);
-     my $c = index($seq, "CCATGCATGG",0);
-     return($dist) if($c == -1);
-     $clip -=1 if($clip !=0); 
-     if( ($c-$dist2re) <= $clip and ($c+10+$dist2re) >= $clip ){
-        $dist = 0;     
-     }elsif($c>$clip){
-        $dist = $c - $clip;
-        $offset = 1;
-     }else{
-        $dist = ($clip - $c - 10);
-        $offset = 2;
-     }
-     my $mlen=length($motif);
-     my $slen = length($seq);
-     if( ($mlen+$clip) <= $slen and $clip>=$mlen){
-        my $sq = substr($seq,($clip-$mlen),($clip+$mlen));
-        if($sq =~ m/CCATGG/){
-          $dist=0;
-        }
-     }
-     if($side eq "a" and $offset == 2 and $dist<=$clip){
-        $dist=0;
-     }elsif($side eq "b" and $offset == 1 and $dist<=$clip){
-        $dist=0;
      }
   }
   return($dist);
