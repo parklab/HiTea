@@ -41,32 +41,36 @@ HiTEA (Hi-C based Transposable Element insertion Analysis) is geared to idenify 
   - If the user wants to use hg19 or hg38 genome assemblies with MboI/DpnII/HindIII/NcoI restriction endonuclease experiment, the precomputated files are available. User will need to input the genome build and RE motif information
   
 ```
-$ hitea -h
+$ hitea
+
+****No input provided
 
 
-Usage: hitea [-w workdir] [-p ncores] [-m re_motif] [-q anchor_mapq] [-o outprefix] [-s clip] [-d dist2motif] [-g genome] [-h help] -i inputs (space separated psam/bam in inverted commas)
+Usage: hitea1.2 [-w workdir] [-p ncores] [-m enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-x if WGS] [-h help] -i inputs (space separated psam/bam in inverted commas)
 
 
     -i inputs :          Input file in pairsam format or unsorted-lossless bam format
     -o outprefix :       Output prefix while generating report files (default: project)
-    -m re_motif :        Motif sequence for restriction endunuclease used for the assay (e.g. Dpn1II/MboI = GATC) (default: GATC)
+    -m enzyme :          Restriction endunuclease used for the assay (default: '', available:MboI,DpnII,HindIII,Arima,NcoI,NotI)
     -w workdir:          Working directory where the files are to be written
     -p ncores :          Number of cores to be used (auto-detected)
     -q anchor_mapq :     Mapping quality threshold for repeat anchored mate (default: 28)
-    -s clip :            Minimum clip length for detecting insertion (should be >=9bp) (default: 20)
-    -d dist2motif :      Cutoff distance to filter out TE insertion calls from the restriction motif (default:3)
-    -g genome :          Genome build to be used (default:hg38, available: mm10, hg19)
+    -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20)
+    -g genome :          Genome build to be used (default:hg38, available: hg19)
+    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F)
+    -x wgs :             whether the file is WGS experiment (default:F)
     -h help :            Display help message
+
 
 ```
   
 Running HiTEA on a single input bam file
 ```
-hitea -i bam/4DNFIC275NK8.bam -w GM12878_test -o gm12878 -g hg38 -m GATC
+hitea -i bam/4DNFIC275NK8.bam -w GM12878_test -o gm12878 -g hg38 -m 'DpnII' -r 'T'
 ```
 
 Running HiTEA on a list of input bam files of a single experiment
 ```
-hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -m GATC
+hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -m 'DpnII' -r 'T'
 ```
   
