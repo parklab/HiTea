@@ -4,88 +4,79 @@ shopt -s extglob
 gap=2  ## internal parameter
 cov=30  ## internal parameter
 chunk=1995M ## internal parameter
-dist2motif=3 ## default parameter
-outprefix=project ## default parameter
-re_motif=GATC ## default parameter
-workdir=$(pwd) ## default parameter
-anchor_mapq=28 ## default parameter
-clip=20 ## default parameter
-genome=hg38 ## default parameter
+anchor_mapq=28
+clip=20
+outprefix=project
+enzyme=""
+workdir=$(pwd)
+genome=hg38
+remap=F
+wgs=F
 help=0
 printHelpAndExit() {
     echo ""
     echo ""
-    echo "Usage: ${0##*/} [-w workdir] [-p ncores] [-m re_motif] [-q anchor_mapq] [-o outprefix] [-s clip] [-d dist2motif] [-g genome] [-h help] -i inputs (space separated psam/bam in inverted commas)"
+    echo "Usage: ${0##*/} [-w workdir] [-p ncores] [-m enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-x if WGS] [-h help] -i inputs (space separated psam/bam in inverted commas)"
     echo ""
     echo ""
     echo "    -i inputs :          Input file in pairsam format or unsorted-lossless bam format"
     echo "    -o outprefix :       Output prefix while generating report files (default: project)"
-    echo "    -m re_motif :        Motif sequence for restriction endunuclease used for the assay (e.g. Dpn1II/MboI = GATC) (default: GATC)"
+    echo "    -m enzyme :          Restriction endunuclease used for the assay (default: '', available:MboI,DpnII,HindIII,Arima,NcoI,NotI)"
     echo "    -w workdir:          Working directory where the files are to be written"
     echo "    -p ncores :          Number of cores to be used (auto-detected)"
     echo "    -q anchor_mapq :     Mapping quality threshold for repeat anchored mate (default: 28)"
-    echo "    -s clip :            Minimum clip length for detecting insertion (should be >=9bp) (default: 20) "
-    echo "    -d dist2motif :      Cutoff distance to filter out TE insertion calls from the restriction motif (default:3)"
-    echo "    -g genome :          Genome build to be used (default:hg38, available: mm10, hg19)"
+    echo "    -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20) "
+    echo "    -g genome :          Genome build to be used (default:hg38, available: hg19)"
+    echo "    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F)"
+    echo "    -x wgs :             whether the file is WGS experiment (default:F)"
     echo "    -h help :            Display help message"
     echo ""
     echo ""
     exit "$1"
 }
-while getopts "i:o:m:w:g:p:q:s:d:g:h" opt; do
+while getopts "i:o:m:w:p:q:s:g:r:x:h" opt; do
     case $opt in
         i) inputs=$OPTARG;;
         o) outprefix=$OPTARG;;
-        m) re_motif=$OPTARG;;
+        m) enzyme=$OPTARG;;
         w) workdir=$OPTARG;;
         p) ncores=$OPTARG;;
         q) anchor_mapq=$OPTARG;;
         s) clip=$OPTARG;;
-        d) dist2motif=$OPTARG;;
         g) genome=$OPTARG;;
+        r) remap=$OPTARG;;
+        x) wgs=$OPTARG;;
         h) printHelpAndExit 0;;
         [?]) printHelpAndExit 0;;
         esac
 done
-if [[ -z $inputs ]]
-    then
+if [[ -z $inputs ]];then
     echo ""
     echo "****No input provided"
     printHelpAndExit 0
 fi
-if [[ -z $re_motif ]]
-    then
+if [[ -z $enzyme ]];then
     echo ""
     echo "****No restriction endunuclease motif provided"
     printHelpAndExit 0
 fi
 
+## think about these parameters
 if [[ $genome == "hg38" ]]; then
-    index=hg38/indexC/Consensus.fa
-    repbase=hg38/repbase/Repbase.fasta
+    index=hg38/indexC/Hg_TEConsensus.fa
+    repbase=hg38/repbase/HumanRepbase.fasta
     bgAnnotations=hg38/bgAnnotations
-    polym=hg38/indexP
-    if [[ $re_motif == "GATC" ]]; then 
-      sites=hg38/RE/GATC.txt
-    elif [[ $re_motif == "AAGCTT" ]]; then
+    indexP=hg38/indexP/polymorph.fa
+    if [[ $enzyme == "MboI" ]]; then 
+      sites=/n/data1/hms/dbmi/park/Dhawal/Genomes/Hg38/hg38_DpnII.txt
+    elif [[ $enzyme == "DpnII" ]]; then
+      sites=/n/data1/hms/dbmi/park/Dhawal/Genomes/Hg38/hg38_DpnII.txt
+    elif [[ $enzyme == "Arima" ]]; then
+      sites=/n/data1/hms/dbmi/park/Dhawal/Genomes/Hg38/hg38_DpnII.txt
+    elif [[ $enzyme == "HindIII" ]]; then
       sites=hg38/RE/AAGCTT.txt
-    elif [[ $re_motif == "CCATGG" ]]; then
-      sites=hg38/RE/CCATGG.txt
-    else
-        echo "RE site file not provided"
-        exit 1
-    fi
-elif [[ $genome == "hg19" ]]; then
-    index=hg19/indexC/Consensus.fa
-    repbase=hg19/repbase/Repbase.fasta
-    bgAnnotations=hg19/bgAnnotations
-    polym=hg19/indexP
-    if [[ $re_motif == "GATC" ]]; then 
-      sites=hg19/RE/GATC.txt
-    elif [[ $re_motif == "AAGCTT" ]]; then
-      sites=hg19/RE/AAGCTT.txt
-    elif [[ $re_motif == "CCATGG" ]]; then
-      sites=hg19/RE/CCATGG.txt
+    elif [[ $enzyme == "NcoI" ]]; then
+      sites=hg38/RE/AAGCTT.txt
     else
         echo "RE site file not provided"
         exit 1
@@ -107,23 +98,28 @@ if ! [[ -e $paramlog ]]; then
   echo "No prameter file was printed"
   exit 1
 fi
+readlength=`samtools view $inputs[0] | head -n 100 | cut -f10 | awk '{ sum += length($0)} END { if (NR > 0) print sum / NR; }'`
+
 echo ""
 echo ""
 echo "I/O and paramters:"  | tee -a $paramlog 
-echo " -i                   $inputs" | tee -a $paramlog 
-echo " -o                   $outprefix" | tee -a $paramlog 
-echo " -w                   $workdir" | tee -a $paramlog 
-echo " -m                   $re_motif" | tee -a $paramlog 
-echo " -sites               $sites" | tee -a $paramlog 
-echo " -index               $index" | tee -a $paramlog 
-echo " -repbase             $repbase " | tee -a $paramlog 
-echo " -bgAnnotations       $bgAnnotations" | tee -a $paramlog 
-echo " -chr_sizes           $chrsize" | tee -a $paramlog 
-echo " -anchor_mapq         $anchor_mapq" | tee -a $paramlog 
-echo " -clip                $clip" | tee -a $paramlog 
-echo " -gap                 $gap" | tee -a $paramlog 
-echo " -chunksize           $chunk" | tee -a $paramlog 
-echo " -ncores (available)  $ncores" | tee -a $paramlog 
+echo " -i                   --inputs            $inputs" | tee -a $paramlog 
+echo " -o                   --outprefix         $outprefix" | tee -a $paramlog 
+echo " -w                   --workdir           $workdir" | tee -a $paramlog 
+echo " -m                   --enzyme            $enzyme" | tee -a $paramlog 
+echo " -sites               --sites             $sites" | tee -a $paramlog 
+echo " -index               --index             $index" | tee -a $paramlog 
+echo " -repbase             --repbase           $repbase " | tee -a $paramlog 
+echo " -x                   --wgs               $wgs" | tee -a $paramlog 
+echo " -remap               --remap             $remap " | tee -a $paramlog 
+echo " -bgAnnotations       --bgAnnotations     $bgAnnotations" | tee -a $paramlog 
+echo " -chr_sizes           --chrsize           $chrsize" | tee -a $paramlog 
+echo " -anchor_mapq         --anchor_mapq       $anchor_mapq" | tee -a $paramlog 
+echo " -clip                --clip              $clip" | tee -a $paramlog 
+echo " -gap                 gap                 $gap" | tee -a $paramlog 
+echo " -read-length         inferred-readlength $readlength" | tee -a $paramlog 
+echo " -chunksize           chunk size          $chunk" | tee -a $paramlog 
+echo " -ncores (available)  --ncores            $ncores" | tee -a $paramlog 
 if [[ "$ncores" -gt 32 ]]; then
     ncores=32
 fi
@@ -134,7 +130,7 @@ if [[ "$tot_threads" -gt 8 ]]; then
 fi
 echo " -threads (used)      $tot_threads" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
-echo "command: hitea -w $workdir -p $ncores -m $re_motif -q $anchor_mapq -o $outprefix -s $clip -d $dist2motif -g $genome -i $inputs"  | tee -a $paramlog 
+echo "command: hitea -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo  Start-Time `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
@@ -147,7 +143,12 @@ echo ""
 echo "# Step1 : checking dependancies ... " | tee -a $paramlog 
 if ! [[ -x $(command -v bwa mem) ]]; then
     echo 'bwa suit not found. make sure to set the path variable right and try again. exiting! ' >&2
-    PATH=$PATH:/n/data1/hms/dbmi/park/Dhawal/Softwares/bwa_0.7.17/
+    exit 1
+    #PATH=$PATH:/n/data1/hms/dbmi/park/Dhawal/Softwares/bwa_0.7.17/
+fi
+if ! [[ -x $(command -v pairsamtools parse --help) ]]; then
+    echo 'pairsamtools suite is not installed. make sure to set the path variable right and try again. exiting! ' >&2   
+    exit 1
 fi
 if ! [[ -x $(command -v bedtools) ]]; then
     echo 'bedtools not found. make sure to set the path variable right and try again. exiting! ' >&2
@@ -165,38 +166,40 @@ echo "great!! all dependancies are present!" | tee -a $paramlog
 echo "" | tee -a $paramlog 
 
 ## Extract header file
-if [[ ${inputs[0]} == *.gz ]]; then
-  zcat ${inputs[0]} | head -n 2000 | grep "#samheader: " | sed -e 's/\#samheader: //g' > $workdir/headers.sam      
-elif [[ ${inputs[0]} == *.bam ]]; then
+if [[ ${inputs[0]} == *.bam ]]; then
   samtools view -H ${inputs[0]} > $workdir/headers.sam
+  echo -e "@PG\tID:hitea\tPN:hitea\tCL:hitea -w $workdir -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -i $inputs" >> $workdir/headers.sam
 else
   echo " can't extract headers. Exiting !"
   exit 1
 fi
-## add HiTEA tag line in bam header.
-echo -e "@PG\tID:hitea\tPN:hitea\tCL:hitea -w $workdir -p $ncores -m $re_motif -q $anchor_mapq -o $outprefix -s $clip -d $dist2motif -g $genome -i $inputs\tPP:pairsam\tVN:0.0.1-dev" >> $workdir/headers.sam
-#cat headers.sam > $workdir/headers.sam
 chrsize=$workdir/chr_sizes.txt
 samtools view -H ${inputs[0]} | awk '$1 ~ /SQ/ {print $2"\t"$3}' - > $chrsize
 sed -i 's/SN://g' $chrsize
 sed -i 's/LN://g' $chrsize
 
+
 ##################################################################################################333
 echo ""
 echo "# Step2 : Splitting input file and generating fastq records ... " | tee -a $paramlog 
-if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]  
-    then
+if ! [[ -e $workdir/${outprefix}_1.fq.gz ]];then
     for input in $inputs; do
       xbase=${input##*/}
       xbase=${xbase%.*}
       size=$(($(wc -c < "$input") +0))
       size=$((size /1000000000))
-      if [[ $input == *.gz ]]; then
-         echo "working on .gz formatted psam input ($xbase, size: $size Gb)" 
-         zcat $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -psam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -m "$re_motif"
-      elif [[ $input == *.bam ]]; then
-         echo "working on bam input ($xbase, size: $size Gb)" 
-         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -m "$re_motif"
+      if [[ $input == *.bam ]]; then
+        echo "working on bam input ($xbase, size: $size Gb)" 
+        if samtools view $input | head| grep -Fq "Yt:Z:"; then
+         echo "File contains read-type classification"
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
+        elif [[ "$wgs" == T ]]; then
+         echo "provided file is a WGS experiment. proceeding without pairsamtool implementation"
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
+        else
+         echo "File doesnot contain read-type classification. Employing pairtools"
+         samtools view -@ 8 $input| pairsamtools parse -c $chrsize $input | pairsamtools split --output-sam - | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme"  -q "$anchor_mapq" 
+        fi
       else
          echo " can't work with provided input file ${inputs[0]}. Exiting! "
          exit 1
@@ -204,7 +207,6 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]
     done
     if [[ $? != 0  ]]; then
       echo "Something went wrong while parsing the input file/s. Exiting! " | tee -a $paramlog 
-      exit 1
     fi
 else
     echo "$workdir/$outprefix_1.fq.gz is already created" 
@@ -216,8 +218,10 @@ MYSEC=$(date +%s)
 DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
 echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog 
 if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]; then    
-    ls $workdir/*temp.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_1.fq.gz
-    ls $workdir/*temp2.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_2.fq.gz
+    cat $workdir/*temp.fq.gz >> $workdir/${outprefix}_1.fq.gz
+    cat $workdir/*temp2.fq.gz >> $workdir/${outprefix}_2.fq.gz
+    #ls $workdir/*temp.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_1.fq.gz
+    #ls $workdir/*temp2.fq.gz | parallel -eta --verbose cat {} >> $workdir/${outprefix}_2.fq.gz
     size=$(($(wc -c < "$workdir/${outprefix}_1.fq.gz") +0))
     ## 1.
     if [[ $size < 10 ]]; then
@@ -258,12 +262,20 @@ echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` | tee -a $paramlog
 echo ""
 echo "" | tee -a $paramlog 
 echo "# Step3 : Extracting clusters  ... " | tee -a $paramlog 
+echo " Mapping merged fastq file and extracting clusters"
 if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
-    echo " Mapping merged fastq file and extracting clusters"
-    echo " bwa mem -t $tot_threads -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam"
-    echo " bwa mem -t $tot_threads -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam"
-    bwa mem -t $tot_threads -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam
-    bwa mem -t $tot_threads -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -sam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam
+    echo ""
+    echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1"
+    bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1
+    if [[ $remap=="T" ]]; then
+       echo ""
+       echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap F -te 2"
+       bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap "F" -te 2
+       rm $workdir/*.temp.remap.fq.gz
+    fi    
+    echo ""
+    echo "bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam"
+    bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam     
     if [[ $? != 0  ]]; then
       echo "Error in cluster extraction step " | tee -a $paramlog 
       exit 1
@@ -340,7 +352,6 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.ClustObj_supportRAMcount.ph ]]; then
-    #Rscript randomTELocations.R $outprefix $workdir $bgAnnotations
     bedtools random -l 1 -n 100000 -g $chrsize > $workdir/${outprefix}_RandomLocs.bed 
     perl annotate_breaks.pl -in $workdir/${outprefix}.ClustObj.ph -ram $workdir/${outprefix}.RAM.sort.bam -index $index -rand $workdir/${outprefix}_RandomLocs.bed -ncores $ncores -outprefix $outprefix -wd $workdir
     if [[ $? != 0  ]]; then
@@ -351,9 +362,8 @@ else
   echo "annotated breakpoint object is already present"
 fi
 
-
 if ! [[ -e $workdir/${outprefix}.ClustObj_PutativeInsertions.ph ]]; then 
-    perl putative_insertions.pl -in $workdir/${outprefix}.ClustObj_supportRAMcount.ph -polym $polym -index $index -repbase $repbase -bgAnnotations $bgAnnotations -sites $sites -motif $re_motif  -ncores $ncores -outprefix $outprefix -wd $workdir
+    perl putative_insertions.pl -in $workdir/${outprefix}.ClustObj_supportRAMcount.ph -polym $indexP -index $index -repbase $repbase -q $anchor_mapq -bgAnnotations $bgAnnotations -sites $sites -enzyme $enzyme -ncores $ncores -outprefix $outprefix -wd $workdir
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
@@ -363,7 +373,7 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.candidate.insertions.bed ]]; then 
-    perl write_insertions.pl -in $workdir/${outprefix}.ClustObj_PutativeInsertions.ph -outprefix $outprefix -wd $workdir -index $index
+    perl write_insertions.pl -in $workdir/${outprefix}.ClustObj_PutativeInsertions.ph -outprefix $outprefix -q $anchor_mapq -wd $workdir -index $index
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
@@ -371,6 +381,8 @@ if ! [[ -e $workdir/${outprefix}.candidate.insertions.bed ]]; then
 else
   echo "Candidate insertion report is already generated"
 fi
+
+exit
 
 MYSEC=$(date +%s)
 DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
@@ -381,9 +393,8 @@ echo ""
 echo "###---- Completed! ----------###"
 echo "" | tee -a $paramlog 
 echo ""
-
 Rscript createReport.R $outprefix $workdir
 if [[ $? != 0  ]]; then
    echo "  {Could not generate HTML report page. One or more R-packages are missing!}"
 fi
-##################################################################################################333 
+##################################################################################################
