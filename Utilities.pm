@@ -1,6 +1,6 @@
 #!/usr/bin/perl
-# Author:
-# Dhawal Jain, Dept of Biomedical Informatics, Harvard
+# HiTEA
+
 package Utilities;
 use warnings FATAL => "all";
 use strict;
@@ -20,6 +20,8 @@ sub get_clip_coord{
   if($cigar eq "*" or $cigar eq ""){
     return($start);
   }
+  
+  $cigar=~ s/H/S/g;  ## replace hardclip by softclip in CIGAR
 
   my @len1 = split (/\D+/,$cigar); # storing the length per operation
   my @ops1 = split (/\d+/,$cigar); # storing the operation
@@ -272,15 +274,15 @@ sub getstrand{
     }
 
     my %freq;
-    $freq{"PolyA"} = Utilitiesround((($s1=~ tr/A//)/length($s1)),2);
-    $freq{"PolyT"} = Utilitiesround((($s1=~ tr/T//)/length($s1)),2);
+    $freq{"PolyA"} = round((($s1=~ tr/A//)/length($s1)),2);
+    $freq{"PolyT"} = round((($s1=~ tr/T//)/length($s1)),2);
     
     if(length($s2)>0){
-     if($freq{"PolyA"} < Utilitiesround((($s2=~ tr/A//)/length($s2)),2)){
-         $freq{"PolyA"} = Utilitiesround((($s2=~ tr/A//)/length($s2)),2);
+     if($freq{"PolyA"} < round((($s2=~ tr/A//)/length($s2)),2)){
+         $freq{"PolyA"} = round((($s2=~ tr/A//)/length($s2)),2);
      }
-     if($freq{"PolyT"} < Utilitiesround((($s2=~ tr/T//)/length($s2)),2)){
-         $freq{"PolyT"} = Utilitiesround((($s2=~ tr/T//)/length($s2)),2);
+     if($freq{"PolyT"} < round((($s2=~ tr/T//)/length($s2)),2)){
+         $freq{"PolyT"} = round((($s2=~ tr/T//)/length($s2)),2);
      }
     }    
     #print "$r1[4]\t$r1[5]\t$r2[4]\t$r2[5]\n"; 
@@ -295,6 +297,109 @@ sub getstrand{
         
       return("NA");
     }
+}
+
+sub common{
+  my ($i,$j,$delim,$number) = @_;
+  if($i eq "" or $i eq "-" or $i eq "*" or $j eq "" or $j eq "-" or $j eq "*"){
+    return(0);
+  }
+  if(!defined $i or!defined $j){
+    return(0);
+  }
+
+  $i =~ s/$delim$//;
+  $j =~ s/$delim$//;
+  my @temp = split($delim,$i);
+  my %hash = map { $_ => 1 } @temp;
+  my @temp2 = split($delim,$j);
+  
+  my $cnt=0;
+  my @out;
+  foreach my $l (@temp2){
+    $cnt++ if($hash{$l});
+    push(@out,$l) if($hash{$l});
+  }
+
+  if($number eq 'true'){
+    return($cnt);
+  }elsif($number eq "false"){
+    return(join($delim,@out));
+  }else{
+    return(0);
+  }  
+}
+
+sub get_reciprocalClust {
+  my ($j, $te) = @_;
+  $j =~ s/\n//g;
+  $j =~ s/,$//; 
+  my $gdist=10;  # some threshold to merge TE mapping coordinate
+  my %freq;
+  my %pos;
+  my @res = ("-",0,0); ## (0)pos, (1)freq, (2)fraction of total reads
+  
+  my @y = split(",",$j);
+  next if(scalar @y ==0);
+  ## for PolyA tails, all mapping can be attributed to start.
+  if($te eq "PolyA"){
+    @y = map { ($_ * 0) +1}  @y;
+  }
+  ## for SVAs, since there is a 30bp repeat expansion in the consensus, any mapping within this region should be awarded a start of 30
+    ## Highly customized for SVAs based on the provided consensus
+  if($te eq "SVA"){
+    @y = map { if($_ <30){ ($_ * 0) +30} else{ $_}}  @y;
+  }
+
+  my $num =1;
+  if(scalar(@y)==1){
+    $pos{$te.$num} = $y[0];
+    $freq{$te.$num}=1;
+  }else{
+    @y = sort{$a <=> $b} @y;
+    my $offset=0;
+    for(my $i=0;$i<=(scalar(@y)-2);$i++){
+      if(($y[($i+1)]-$y[$i])<$gdist){
+        $offset++;
+        $freq{$te.$num}++;
+        if($offset==1){
+          $freq{$te.$num}++;          
+          $pos{$te.$num} .= $y[$i].",";
+        }
+        $pos{$te.$num} .= $y[$i+1].",";
+      }else{
+        $num++;
+        $offset=0;
+      }
+    }
+  }  
+  
+  my @sortedkeys;
+  if(scalar (keys %freq)>1){
+    @sortedkeys = sort{$freq{$b} <=> $freq{$a}} keys %freq;
+  }else{
+    @sortedkeys = keys %freq;
+  }
+  my $o= $sortedkeys[0];
+  
+  if(!defined $o){
+    return(\@res);
+  }
+
+  $pos{$o} =~ s/,$//;
+  my @x = split(",",$pos{$o});
+  @x = sort {$a <=> $b} @x if(scalar@x >1);
+  my $coord = $x[0];      
+  my %x;
+  for (@x) {$x{$_}++;}     
+  if(scalar keys %x >1){
+     @x = sort{ $x{$b} <=> $x{$a}} keys %x;
+     $coord= $x[0];
+  } 
+  my $t = $freq{$o};
+  my $frac = round( $t/scalar@y,2);
+  @res = ($coord,$t, $frac); 
+  return(\@res);
 }
 
 sub get_teMap_clusterfreq {
@@ -428,7 +533,7 @@ sub get_longestseq{
 sub getOriRatio{
   my ($i) =shift;
     $i =~ s/,$//;
-    my @i = Utilities::unique($i,",","false");
+    my @i = unique($i,",","false");
     my %res;
     foreach my $l (@i){
       #print $l,"\n";
@@ -444,7 +549,7 @@ sub getOriRatio{
       $res{$Ori}++;
     }
     if(exists($res{"FF"}) and exists($res{"FR"}) ){
-      return(Utilitiesround( ($res{"FR"})/($res{"FF"}+$res{"FR"})  ,2));
+      return(round( ($res{"FR"})/($res{"FF"}+$res{"FR"})  ,2));
     }elsif(exists($res{"FF"}) and !exists($res{"FR"})){
       return("0.00");
     }elsif(!exists($res{"FF"}) and exists($res{"FR"})){
