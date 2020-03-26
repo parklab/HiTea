@@ -50,6 +50,7 @@ ggccgggcgcggtggctcacgcctgtaatcccagcactttgggaggccgaggcgggtggatcatgaggtc
   - Alternately, HiTea can use name sorted bam files as an input and employs Pairtools for read-type classification
   - If the user wants to use hg19 or hg38 genome assemblies the precomputated files are available. User will need to input the genome build and RE motif information
   - At present, HiTea supports following RE enzymes: MboI/DpnII/HindIII/NcoI/Arima-cocktail
+  - HiTea is currently tested on 100bp paired end sequencing data.
   
 ```
 $ hitea
