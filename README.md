@@ -4,8 +4,7 @@ computational tool to identify trasposable element insertions using Hi-C data
 
 - Description:
 
-HiTea (Hi-C based Transposable Element Analyzer) is geared to idenify non-reference transposable elemenet insertions from the Hi-C data. It uses split Hi-C read information and read coverage to detect insertions of three major classes of active human transposable elements (TE) - Alu (SINE), L1HS(LINE) and SVA.
-
+HiTea (Hi-C based Transposable Element Analyzer) is geared to idenify non-reference transposable elemenet insertions from the Hi-C data. It uses split Hi-C read information and read coverage to detect insertions of three major classes of active human transposable elements (TE) - Alu (SINE), L1HS(LINE) and SVA. 
 
 - Dependancies:
   - PERL(≥v5.24)
@@ -20,7 +19,7 @@ HiTea (Hi-C based Transposable Element Analyzer) is geared to idenify non-refere
     - rmarkdown, knitr, EnrichedHeatmap, circlize
  
  - Required inputs:
- HiTtea requires following reference data files during the run.  
+HiTtea requires following reference data files during the run.  
    - TE-family consensus                = TE-family consensus sequences in fasta format. These sequences can be derived from literature or by performing multiple sequence alignment of highly variable sequences of a TE-family in the human genome. HiTea uses TE-family consensus sequences for Alu, L1Hs and SVA from an earlier study (ref-1).  
    - TE-family reference copy locations = This .gzip file contains genomic location of the TE-family in bed format. The 7th column in this file is reserved for name of the TE-family as provided in the above TE-family consensus fasta file. This file can be downloded from Repeatmasker database. HiTea uses the file as provided by (ref-1) 
   
@@ -90,4 +89,10 @@ Running HiTEA on a list of input bam files of a single experiment
 ```
 hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -e 'MboI' -r 'T'
 ```
+
+
+References:
+1. Gardner, E. J. et al. The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res. (2017). doi:10.1101/gr.218032.116
+2. Jurka, J. et al. Repbase Update, a database of eukaryotic repetitive elements. Cytogenet. Genome Res. (2005). doi:10.1159/000084979
+
   
