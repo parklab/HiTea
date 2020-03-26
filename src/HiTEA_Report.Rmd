@@ -1,0 +1,245 @@
+---
+title: "HiTEA run report"
+author: "HiTEA V1.0"
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    highlights: pygments
+    self_contained: true
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+params:
+    dir:
+     value: x
+    outprefix:
+      value : x
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(
+  # fig.path='Figs/',
+  echo=F, # shows code
+  fig.width=14,fig.height=20
+  ,cache=F,message = F, warning = F
+  #, warning=FALSE, message=FALSE
+)
+set.seed(31)
+```
+
+
+# Approach
+- Split the input bam file into smaller chunks using GNU parallel
+- Process each chunk to extract Hi-C non-chimeric reads (i.e. non-conforming Hi-C pairs)
+- Generate a fastq file to map to the TE consensus assembly
+- If the remap option is specified, the reads that do not map to the consensus are further mapped to the polymorphic sequences of the TE families
+- Clusters of mates are identified such that the part of the mate maps to the reference sequences while the other part clusters on the TE consensus assembly
+- Once the clusters are obtained, all the reads supporting TE insertion at the locus are modelled using a negative binomial model
+- The putative insertions are further filtered to allow reporting of the high confidence instances 
+- A report file (*.candidate.insertion.bed) is generated in .bed format
+
+
+# Input parameters and processing steps 
+- HiTEA was run using following parameters
+```{r parameters, comment=''}
+suppressPackageStartupMessages(library(GenomicRanges,quietly = T))
+suppressPackageStartupMessages(library(data.table,quietly = T))
+suppressPackageStartupMessages(library(knitr,quietly = T))
+suppressPackageStartupMessages(library(kableExtra,quietly = T))
+suppressPackageStartupMessages(library(DT,quietly = T))
+suppressPackageStartupMessages(library(ggplot2,quietly = T))
+suppressPackageStartupMessages(library(EnrichedHeatmap,quietly = T))
+suppressPackageStartupMessages(library(circlize,quietly = T))
+
+file=paste0(params$dir,"/",params$outprefix,".param.log")
+cat(readLines(con = paste0(file)),sep = "\n")
+
+```
+
+# Summary of the read pairs and their flags
+- Read types are classified using pairtools. 
+- While, the internal read classification uses following nomenclature
+    * DE = Clipped reads where the clipped segments are at least '-clip' parameter long
+    * IE = Reads that do not define the clustur locus but havbe their mates mapping to the TE consensus. In other words these are Repeat Anchored Mates (RAM, as defined by ref-1)
+    * TP = Reads that do NOT carry RE ligation motifs
+    * FP = Reads that carry RE ligation motif
+
+```{r read_summary,out.height=6,out.width=10}
+file=paste0(params$dir,"/",params$outprefix,".ReadSummary.logs")
+cat(readLines(con = paste0(file)),sep = "\n")
+```
+
+
+# GNU run logs
+- GNU parallel was used for splitting and piping the input file on all available cores
+- The submitted job logs are displayed below
+
+```{r gnu,out.height=6,out.width=10}
+file=paste0(params$dir,"/",params$outprefix,".parseGNU.log")
+dt = read.delim(paste0(file),header = T)
+#knitr::kable(dt)%>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#  scroll_box(width = "100%", height = "500px")
+datatable(dt, extensions = 'Buttons',options = list(searching = TRUE,pageLength = 5,dom = 'Bfrtip', 
+                   buttons = c('excel', "csv")))
+```
+
+
+# Read-pair orientation QC
+- Characteristic plot depicting mate-pair orientations versus distance between their mapping
+- For more reference, refer [https://data.4dnucleome.org/] for more details
+
+```{r oriqc, warning=F,echo=F,fig.width=6,fig.height=5}
+ file=paste0(params$dir,"/",params$outprefix,".ReadPairInsertSizeOriSummary.logs.gz")
+  pl <- read.delim(file = paste0(file),header = F)
+  
+  ggplot(pl,aes(x=V1,y=log10(V3),col=V2))+geom_line(size=1.5)+
+    theme_bw()+ xlab("inter-mate distance, log10")+ ylab("number of reads, log10")+
+    geom_vline(xintercept = c(3,3.3),col="gray",linetype="dashed")+
+    theme(axis.title = element_text(size=18,color="black"),
+          axis.text = element_text(size=15,colour = "black"),
+          legend.position = "top",
+          legend.text = element_text(size=16,colour = "black"),
+          legend.title = element_blank())
+
+```
+
+
+# Background modeling information
+- Reads supporting an insertion (i.e. clipped reads at the insertion site and non-clipped reads in the 2kb window) are counted for all putative insertions
+- A set of 100,000 insertions points are randomly selected in the genome and above exercise is repeated. 
+- Based on sequencing depth, the reads supporting insertion for randomly selected loci are modeleled using negative binomial function
+- Enrichment of reads supporting the insertion is sought for the putative candidates
+- Following figures display:
+    * correlation between sequencing depth and reads supporting insertion
+    * mean vs standard deviation relationship between the randomly selected loci
+    * p-value distribution from the model
+
+```{r modeling, warning=F,echo=F,fig.width=12,fig.height=16}
+file=paste0(params$dir,"/",params$outprefix,"_bgModeling.RData")
+load(paste0(file))
+
+ nrows <- length(plotdf)
+  par(mfrow=c(nrows,3))
+  for( f in names(plotdf)){
+    pl <- plotdf[[paste0(f)]]
+    
+    ## smooth scatter plot
+    smoothScatter( pl[pl$dataframe=="ctr",]$x, pl[pl$dataframe=="ctr",]$y,xlab="Total coverage",ylab="Hi-C ambiguous read coverage",cex.lab=1.5,cex.axis=1.5,cex.main=3)
+    loess.fit = tryCatch({
+      loess.smooth(pl[pl$dataframe=="ctr",]$x, pl[pl$dataframe=="ctr",]$y)
+    },error = function(e) { return(NA)})
+    if(!is.na(loess.fit)){
+      lines(loess.fit,col="red")
+    }
+    ## mead vs sd plot    
+    plot(pl[pl$dataframe=="bg",]$x,pl[pl$dataframe=="bg",]$y,main=paste0(f),xlab="mean",ylab="sd",cex=1.2,cex.lab=1.5,cex.axis=1.5,cex.main=3,pch=16,col=rgb(1,0,0,0.2))
+    lines(x = pl[pl$dataframe=="bg",]$x,y=sqrt(pl[pl$dataframe=="bg",]$x),col="black")
+    
+    ## P-value histogram  
+    hist(pl[pl$dataframe=="ex",]$x,breaks=20,xlab="p-value",ylab = "frequency",main=paste0(f," (p-values)"),cex.lab=1.5,cex.axis=1.5,cex.main=3)
+  }
+
+
+```
+
+
+
+# Insertion call Summary {.tabset .tabset-fade}
+- HiTEA calls are summarized in the table below
+- Status 3: High confidence calls with both right and left hand side clip information
+- Status 2: High confidence calls with only single side clip inforamtion available
+- Status 1: Calls overlap with known genomic copies of a given transposable element
+- Status 0: Poor quality calls likely to be false positive (omit them from the analyses)
+
+## High confidence calls
+
+```{r hc-calls}
+file=paste0(params$dir,"/",params$outprefix,".candidate.insertions.bed")
+dt = read.delim(paste0(file),header = F,comment.char = "#")
+names(dt) = c("chr","start","end","id","score","strand","TE","status","description","remark")
+#knitr::kable(dt)%>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))%>%
+#  scroll_box(width = "100%", height = "500px")
+datatable(dt[dt$status>0,], extensions = 'Buttons',options = list(searching = TRUE,pageLength = 10,dom = 'Bfrtip', 
+                   buttons = c('excel', "csv")))
+
+```
+
+
+## Omitted clusters
+
+```{r lc-calls}
+datatable(dt[dt$status==0,], extensions = 'Buttons',options = list(searching = TRUE,pageLength = 10,dom = 'Bfrtip', buttons = c('excel', "csv")))
+
+```
+
+
+# Coverage summary along the HiTEA calls
+- Reads supporting the insertion are of two types
+    * Clipped reads that define insertion breakpoint
+    * Repeat Anchored Mates (RAM)
+- For each of the high confidence HiTEA call (i.e. status>=1), read coverage for above read-types is displayed.
+- The coverages are grouped by TEs
+- Color scale represent total number of reads on log2 scale (with an addition of a pseudocount of 1)
+
+```{r coverage_plots, warning=F,echo=F,fig.width=8,fig.height=10}
+file=paste0(params$dir,"/",params$outprefix,".CovPlotMatrix.RData")
+makematrix <- function(a){
+    a <- as.matrix(a)
+    a = a[,400:600]
+    a[a>300] = 300
+    a <-log2(a+1)
+    a[!is.finite(a)] <- 0
+    dim(a) = dim(a)
+    attr(a, "upstream_index") = 1:100
+    attr(a, "target_index") = 0
+    attr(a, "downstream_index") = 101:200
+    attr(a, "extend") = c(1,1)  # it must be a vector of length two
+    class(a) = c("normalizedMatrix", "matrix")
+    attr(a, "signal_name") = "HiC_Amb_Cov"
+    attr(a, "target_name") = "Insertion"
+    attr(a,"target_is_single_point") = TRUE
+    return(a)
+}
+
+## High confidence TE calls
+dt0 <- dt[dt$status>=1,]
+
+if(file.exists(file) & nrow(dt0)>50){
+ load(paste0(file)) #m.spl,m.unspl
+ file=paste0(params$dir,"/",params$outprefix,".candidate.insertions.bed")
+ dt = read.delim(paste0(file),header = F,comment.char = "#")
+ names(dt) = c("chr","start","end","id","score","strand","TE","status","description","remark")
+ 
+ m.spl <- m.spl[match(dt$id,rownames(m.spl)),]
+ m.unspl <- m.unspl[match(dt$id,rownames(m.unspl)),]
+
+ m0.spl <- m.spl[rownames(m.spl)%in%dt[dt$status>=1,]$id,]
+ m0.unspl <- m.unspl[rownames(m.unspl)%in%dt[dt$status>=1,]$id,]
+ m0.spl <- makematrix(m0.spl)
+ m0.unspl <- makematrix(m0.unspl)
+ col_spl = colorRamp2(c(0, max(m0.spl,na.rm=T)), c("white","blue4"))
+ col_unspl = colorRamp2(c(0, max(m0.unspl,na.rm=T)), c("white","blue4"))
+
+ ht_list1 =  Heatmap(dt0$TE, col = structure(2:6, names = levels(as.factor(dt0$TE)) ),
+                    name = "",show_row_names = FALSE, width = unit(1, "mm")) +
+ EnrichedHeatmap(m0.spl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize = 30),axis_name_gp =   gpar(fontsize = 25), col = col_spl, name =   "#reads(A),log2",top_annotation = HeatmapAnnotation(lines =   anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(A) Clipped mates")+
+  EnrichedHeatmap(m0.unspl,axis_name = c("","Insertion",""),column_title_gp = gpar(fontsize =  30),axis_name_gp = gpar(fontsize = 25), col = col_spl, name =   "#reads(B),log2",top_annotation =   HeatmapAnnotation(lines = anno_enriched(gp = gpar(col = 2:6),yaxis_facing = "left")), column_title = "(B) RAM")
+
+ draw(ht_list1,split=dt0$TE,heatmap_legend_side = "bottom", gap = unit(2, "mm"))
+  
+}else{
+  cat("Number of high confidence calls are <50. Can't genrate coverage plot\n")
+}
+  
+```
+
+
+# References:
+1. Lee, E., Iskow, R., Yang, L., Gokcumen, O., Haseley, P., Luquette, L. J., … Park, P. J. (2012). Landscape of somatic retrotransposition in human cancers. Science. http://doi.org/10.1126/science.1222077
+
