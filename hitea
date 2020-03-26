@@ -11,7 +11,6 @@ enzyme=""
 workdir=$(pwd)
 genome=""
 remap=F
-wgs=F
 index=""
 repbase=""
 bgAnnotations=""
@@ -20,7 +19,7 @@ help=0
 printHelpAndExit() {
     echo ""
     echo ""
-    echo "Usage: ${0##*/} [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-x T/F,if WGS] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)"
+    echo "Usage: ${0##*/} [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)"
     echo ""
     echo "Required****"
     echo "    -i inputs :          Input file in pairsam format or unsorted-lossless bam format"
@@ -39,7 +38,6 @@ printHelpAndExit() {
     echo "    -q anchor_mapq :     Mapping quality threshold for repeat anchored mate on the reference genome (default: 28)"
     echo "    -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20) "
     echo "    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F)"
-    echo "    -x wgs :             whether the file is a WGS experiment (default:F)"
     echo "    -h help :            Display help message"
     echo ""
     echo ""
@@ -114,7 +112,6 @@ echo " -w                   --workdir           $workdir" | tee -a $paramlog
 echo " -m                   --enzyme            $enzyme" | tee -a $paramlog 
 echo " -index               --index             $index" | tee -a $paramlog 
 echo " -repbase             --repbase           $repbase " | tee -a $paramlog 
-echo " -x                   --wgs               $wgs" | tee -a $paramlog 
 echo " -remap               --remap             $remap " | tee -a $paramlog 
 echo " -bgAnnotations       --bgAnnotations     $bgAnnotations" | tee -a $paramlog 
 echo " -chr_sizes           --chrsize           $chrsize" | tee -a $paramlog 
@@ -239,9 +236,6 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]];then
         echo "working on bam input ($xbase, size: $size Gb)" 
         if samtools view $input | head| grep -Fq "Yt:Z:"; then
          echo "File contains read-type classification"
-         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
-        elif [[ "$wgs" == T ]]; then
-         echo "provided file is a WGS experiment. proceeding without pairsamtool implementation"
          samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         else
          echo "File doesnot contain read-type classification. Employing pairtools"
