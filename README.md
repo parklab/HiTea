@@ -35,14 +35,12 @@ chr1    40628   40729   AluSz6  .       -       Alu
 (chr) (start) (end) (name)  (score) (strand)  (TE-family)
 ```
 - Optional inputs:   
+   - Repbase subfamily consensus      = HiTea uses Repbase subfamily consensus sequences to determine the subfamily annotation of the non-reference TE insertions
    - Polymorphic sequence file        = If the clip-sequences from Hi-C non-conforming reads do not map to the TE-family consensus sequences, the users can provide polymorphic sequences for a given TE-family. It is possible that the actual sequence of the TE-element may be divergent from the family-wise consensus. The file contains fasta format entries. The fasta header should be in the format "TE-family-name~Polymorphic-sequence-name. At present, HiTea uses Repbase (ref-2) subfamily sequences as polymorphic sequences. This file required when remap option is turned on (-remap 'T')
 ```
 >Alu~AluYb9
 ggccgggcgcggtggctcacgcctgtaatcccagcactttgggaggccgaggcgggtggatcatgaggtc
 ```
-   - Repbase subfamily consensus      = HiTea uses Repbase subfamily consensus sequences to determine the subfamily annotation of the non-reference TE insertions
- 
- 
  
 - Running HiTea:
   *It is required to set the path-variable for HiTea bash script file before running it.
