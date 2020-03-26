@@ -40,8 +40,8 @@ chr1    40628   40729   AluSz6  .       -       Alu
 >Alu~AluYb9
 ggccgggcgcggtggctcacgcctgtaatcccagcactttgggaggccgaggcgggtggatcatgaggtc
 
-```
-   - Repbase subfamily consensus      = HiTea uses Repbase subfamily consensus sequences to determine the subfamily annotation of the non-reference TE insertions
+  ```
+    - Repbase subfamily consensus      = HiTea uses Repbase subfamily consensus sequences to determine the subfamily annotation of the non-reference TE insertions
  
  
  
