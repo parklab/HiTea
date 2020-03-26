@@ -20,8 +20,8 @@ HiTea (Hi-C based Transposable Element Analyzer) is geared to idenify non-refere
  
  - Required inputs:
 HiTtea requires following reference data files during the run.  
-   - TE-family consensus                = TE-family consensus sequences in fasta format. These sequences can be derived from literature or by performing multiple sequence alignment of highly variable sequences of a TE-family in the human genome. HiTea uses TE-family consensus sequences for Alu, L1Hs and SVA from an earlier study (ref-1).  
-   - TE-family reference copy locations = This .gzip file contains genomic location of the TE-family in bed format. The 7th column in this file is reserved for name of the TE-family as provided in the above TE-family consensus fasta file. This file can be downloded from Repeatmasker database. HiTea uses the file as provided by (ref-1) 
+   - TE-family consensus                = TE-family consensus sequences in fasta format. These sequences can be derived from literature or by performing multiple sequence alignment of highly variable sequences of a TE-family in the human genome. In addition, we use a PolyA fasta entry in this file to score for TPRT-mediated polyA/T tails on the non-reference TE-insertion (ref-1). HiTea uses TE-family consensus sequences for Alu, L1Hs and SVA from an earlier study (ref-2).  
+   - TE-family reference copy locations = This .gzip file contains genomic location of the TE-family in bed format. The 7th column in this file is reserved for name of the TE-family as provided in the above TE-family consensus fasta file. This file can be downloded from Repeatmasker database. HiTea uses the file as provided by (ref-2) 
   
 ```
  $ zcat hg38/bgRepeats_hg38.bed.gz | head
@@ -35,7 +35,7 @@ chr1    40628   40729   AluSz6  .       -       Alu
 ```
 - Optional inputs:   
    - Repbase subfamily consensus      = HiTea uses Repbase subfamily consensus sequences to determine the subfamily annotation of the non-reference TE insertions
-   - Polymorphic sequence file        = If the clip-sequences from Hi-C non-conforming reads do not map to the TE-family consensus sequences, the users can provide polymorphic sequences for a given TE-family. It is possible that the actual sequence of the TE-element may be divergent from the family-wise consensus. The file contains fasta format entries. The fasta header should be in the format "TE-family-name~Polymorphic-sequence-name. At present, HiTea uses Repbase (ref-2) subfamily sequences as polymorphic sequences. This file required when remap option is turned on (-remap 'T')
+   - Polymorphic sequence file        = If the clip-sequences from Hi-C non-conforming reads do not map to the TE-family consensus sequences, the users can provide polymorphic sequences for a given TE-family. It is possible that the actual sequence of the TE-element may be divergent from the family-wise consensus. The file contains fasta format entries. The fasta header should be in the format "TE-family-name~Polymorphic-sequence-name. At present, HiTea uses Repbase (ref-3) subfamily sequences as polymorphic sequences. This file required when remap option is turned on (-remap 'T')
 ```
 >Alu~AluYb9
 ggccgggcgcggtggctcacgcctgtaatcccagcactttgggaggccgaggcgggtggatcatgaggtc
@@ -92,7 +92,8 @@ hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM1
 
 
 References:
-1. Gardner, E. J. et al. The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res. (2017). doi:10.1101/gr.218032.116
-2. Jurka, J. et al. Repbase Update, a database of eukaryotic repetitive elements. Cytogenet. Genome Res. (2005). doi:10.1159/000084979
+1. Lee, E. et al. Landscape of Somatic Retrotransposition in Human Cancers. 1–7 (2012). doi:10.1038/nrg2072
+2. Gardner, E. J. et al. The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res. (2017). doi:10.1101/gr.218032.116
+3. Jurka, J. et al. Repbase Update, a database of eukaryotic repetitive elements. Cytogenet. Genome Res. (2005). doi:10.1159/000084979
 
   
