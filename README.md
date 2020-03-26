@@ -56,7 +56,7 @@ $ hitea
 ****No input provided
 
 
-Usage: hitea [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-x T/F,if WGS] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)
+Usage: hitea [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)
 
 Required****
     -i inputs :          Input file in pairsam format or unsorted-lossless bam format
