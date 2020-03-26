@@ -75,7 +75,6 @@ Optional
     -q anchor_mapq :     Mapping quality threshold for repeat anchored mate on the reference genome (default: 28)
     -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20)
     -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F)
-    -x wgs :             whether the file is a WGS experiment (default:F)
     -h help :            Display help message
 
 
