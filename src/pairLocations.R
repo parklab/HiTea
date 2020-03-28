@@ -10,6 +10,8 @@ if (length(args)==0) {
 suppressPackageStartupMessages(library(GenomicRanges,quietly = T))
 suppressPackageStartupMessages(library(data.table,quietly = T))
 
+#d <- read.delim("A:/work/temp/gmH1.temp.clusters.txt",header=T)
+#d <- with(d,GRanges(V1,IRanges(V4,V5),V3,V2))
 d = read.delim(args[1],header=T,comment.char = "#")   ## chr, start,end,strand,cliploc,side
 d = with(d,GRanges(chr,IRanges(start,end),strand,clipcoord,side,reads,score))
 r = reduce(d,ignore.strand=T)

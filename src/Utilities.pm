@@ -412,13 +412,13 @@ sub get_reciprocalClust {
                        $side2 <=> $side1; } keys %res;
     my @keys = grep {$res{$_}{freq} == $res{$sortedkeys[0]}{freq}} keys %res;
     @keys = sort{$a <=> $b } @keys;
-    $out[1] = Utilities::unique($res{$keys[0]}{ids}," ","true");
-    $out[3] = Utilities::unique($res{$keys[0]}{ids}," ","false");
+    $out[1] = src::Utilities::unique($res{$keys[0]}{ids}," ","true");
+    $out[3] = src::Utilities::unique($res{$keys[0]}{ids}," ","false");
     $out[3] =~ s/ /,/g;
 
-    my $xx = Utilities::unique($ids,",","false");
+    my $xx = src::Utilities::unique($ids,",","false");
     $xx = scalar(split(",",$xx));
-    $out[2] = Utilities::round($out[1]/$xx,2);
+    $out[2] = src::Utilities::round($out[1]/$xx,2);
     my %p;
     my @p = split(" ",$res{$keys[0]}{pos});
 
@@ -695,7 +695,7 @@ sub getATFreq{
   
   @t = ($t[0]/length($rr1), $t[1]/length($rr1), $t[2]/length($rr2), $t[3]/length($rr2));
   @t = sort{$b <=> $a}@t;
-  my $x = Utilities::round($t[0],2);
+  my $x = src::Utilities::round($t[0],2);
   return($x);
 }
 
@@ -760,7 +760,7 @@ sub hompolymer_check{
   my @keys = keys %fq;
   @keys = sort{ $fq{$b} <=> $fq{$a} or $b cmp $a} @keys if(scalar @keys >1);
   
-  my$rat = Utilities::round( ($fq{$keys[0]}*100)/length($sseq),2);
+  my$rat = src::Utilities::round( ($fq{$keys[0]}*100)/length($sseq),2);
   #print $sseq,"\t",length $sseq,,"\t",$rat,"\n";
 
   my $out ="*";
@@ -783,7 +783,7 @@ sub getClonalClipPercent {
   my %ty; $ty{$_}++ for(@ty);
   my @keys = sort { $ty{$b} <=> $ty{$a} } keys %ty;
   my $RT=0;
-  $RT = Utilities::round($ty{$keys[0]}/scalar(@ty),2) if(scalar @keys>0);          
+  $RT = src::Utilities::round($ty{$keys[0]}/scalar(@ty),2) if(scalar @keys>0);          
   return($RT);
 }
 
@@ -836,7 +836,7 @@ sub gridCheck_PolyA{
       
    if($aa>=10 and $side eq "a"){
      my @res;
-     my $clp = Utilities::get_clip_coordV1($sam[3],"*",$sam[5],"lhs");
+     my $clp = src::Utilities::get_clip_coordV1($sam[3],"*",$sam[5],"lhs");
      if( $clp<= ($CLP+$y) and $clp>= ($CLP+$x) ){
        my $sq = substr($sam[9],0,$aa);
        $res[0]= () = $sq =~ /A|a/g;
@@ -851,7 +851,7 @@ sub gridCheck_PolyA{
      }
    }elsif($ab>=10 and $side eq "b"){
      my @res;
-     my $clp = Utilities::get_clip_coordV1($sam[3],"*",$sam[5],"rhs");
+     my $clp = src::Utilities::get_clip_coordV1($sam[3],"*",$sam[5],"rhs");
      if(  $clp<= ($CLP-$x) and $clp>= ($CLP-$y) ){
        my $sq = substr($sam[9],$ab*(-1));
        $res[0]= () = $sq =~ /A|a/g;
@@ -870,9 +870,9 @@ sub gridCheck_PolyA{
   my $out = "n/a";
   if(scalar keys %out >0){
     my @keys = keys %out;
-    @keys = sort{ abs($a - $CLP) <=> abs($b - $CLP) or Utilities::unique($out{$b}{ids},",","true") <=> Utilities::unique($out{$b}{ids},",","true"); 
+    @keys = sort{ abs($a - $CLP) <=> abs($b - $CLP) or src::Utilities::unique($out{$b}{ids},",","true") <=> src::Utilities::unique($out{$b}{ids},",","true"); 
               } @keys if(scalar @keys >1);
-    $out = $keys[0]."|".Utilities::unique($out{$keys[0]}{ids},",","true");              
+    $out = $keys[0]."|".src::Utilities::unique($out{$keys[0]}{ids},",","true");              
   }
 
   #print $out,"\n\n";

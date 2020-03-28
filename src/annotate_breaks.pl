@@ -74,7 +74,7 @@ if($help or $in eq "" or $ram eq "" or $index eq "" or $rand eq ""){
 
 ## Dependancies
 my %cov = %{retrieve($outprefix.".coverage.ph")};
-print " ERROR: generateRanges.R does not exist in the same directory!\n" unless -e "generateRanges.R";
+print " ERROR: generateRanges.R does not exist in the same directory!\n" unless -e "src/generateRanges.R";
 
 #--------------------------------------------------------------------------------------------------------------
 # I/O
@@ -158,15 +158,21 @@ my $clust = count_read_support_from_RAM($ram,\%clusters);
 %clusters =%{$clust};
 store \%clusters, $outprefix.'.ClustObj_supportRAMcount.ph'; #Save 
 
+my $oufile=$outprefix.'.RAM.clusters'; #Save 
+open FOO,">$oufile" or die $!;
+print FOO Dumper %clusters;
+close(FOO);
+
 ## generate genomic range objects for the supporting reads
 undef %clusters;
+
 foreach my $te (@TEELEMENTS){
   my $te1 = $te;
   $te=~ s/\/\S*$//g;
   my $file = $outprefix."_".$te."_supportingreads.txt";
   my $tegr = $wd."/".$baseoutprefix."_".$te;
   print qq[ creating GRange..  ];    ##(1)chr,(2)start,(3)end,(4)id,(5)strand,(6)evi,(7)clip, (8)refMapqQ, (9)TEMapScore, (10) TE_strand (11) 
-  system( qq[Rscript generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
+  system( qq[Rscript src/generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
   print qq[ cleaning up..  ];    
   system( qq[rm $file]) == 0 or die qq[ Error in deleting intermetidate files for $te1 \n];            
   print qq[ Done\n];

@@ -11,6 +11,7 @@ enzyme=""
 workdir=$(pwd)
 genome=""
 remap=F
+wgs=F
 index=""
 repbase=""
 bgAnnotations=""
@@ -19,7 +20,7 @@ help=0
 printHelpAndExit() {
     echo ""
     echo ""
-    echo "Usage: ${0##*/} [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)"
+    echo "Usage: ${0##*/} [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-x T/F,if WGS] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)"
     echo ""
     echo "Required****"
     echo "    -i inputs :          Input file in pairsam format or unsorted-lossless bam format"
@@ -30,14 +31,15 @@ printHelpAndExit() {
     echo "  (following 4 parameters are optional if -g is specified)"
     echo "    -n index :           fasta format file for TE-consensus sequences"
     echo "    -b repbase :         fasta format file for Repbase subfamily sequences"
-    echo "    -p indexP :          fasta format file for Polymorphic sequences (header should be Family~name format) (optional)"
+    echo "    -p indexP :          fasta format file for Polymorphic sequences (header should be Family~name format"
     echo "    -a anno :            reference-genome copies for TE-family members"
     echo ""
     echo "    -o outprefix :       Output prefix while generating report files (default: project)"
     echo "    -w workdir:          Working directory where the files are to be written"
     echo "    -q anchor_mapq :     Mapping quality threshold for repeat anchored mate on the reference genome (default: 28)"
     echo "    -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20) "
-    echo "    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F, if T, -p needs to be specified)"
+    echo "    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F)"
+    echo "    -x wgs :             whether the file is a WGS experiment (default:F)"
     echo "    -h help :            Display help message"
     echo ""
     echo ""
@@ -87,6 +89,13 @@ elif [[ $genome == "hg19" ]]; then
     indexP=hg19/Polymorphs_Hs.fa
 fi
 
+tempdir=$workdir/tmp
+mkdir -p $tempdir
+mkdir -p $workdir/indexC
+mkdir -p $workdir/indexP
+mkdir -p $workdir/repbase
+mkdir -p $workdir/bgAnnotations
+
   #statements
 STARTSEC=$(date +%s)
 MYSEC=$(date +%s)
@@ -98,7 +107,7 @@ tot_threads=$(($ncores * $threads))
 paramlog=${workdir}/${outprefix}.param.log
 echo "" > $paramlog
 if ! [[ -e $paramlog ]]; then
-  echo "No prameter file was printed"
+  echo "No parameter file was printed"
   exit 1
 fi
 readlength=`samtools view $inputs[0] | head -n 100 | cut -f10 | awk '{ sum += length($0)} END { if (NR > 0) print sum / NR; }'`
@@ -112,6 +121,7 @@ echo " -w                   --workdir           $workdir" | tee -a $paramlog
 echo " -m                   --enzyme            $enzyme" | tee -a $paramlog 
 echo " -index               --index             $index" | tee -a $paramlog 
 echo " -repbase             --repbase           $repbase " | tee -a $paramlog 
+echo " -x                   --wgs               $wgs" | tee -a $paramlog 
 echo " -remap               --remap             $remap " | tee -a $paramlog 
 echo " -bgAnnotations       --bgAnnotations     $bgAnnotations" | tee -a $paramlog 
 echo " -chr_sizes           --chrsize           $chrsize" | tee -a $paramlog 
@@ -130,7 +140,8 @@ if [[ "$tot_threads" -gt 8 ]]; then
     tot_threads=8
 fi
 echo " -threads (used)      $tot_threads" | tee -a $paramlog 
-echo "" | tee -a $paramlogecho "command: hitea -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
+echo "" | tee -a $paramlog 
+echo "command: hitea -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo "" | tee -a $paramlog  
 
@@ -165,12 +176,6 @@ fi
 echo "great!! all dependancies are present!" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 
-tempdir=$workdir/tmp
-mkdir -p $tempdir
-mkdir -p $workdir/indexC
-mkdir -p $workdir/indexP
-mkdir -p $workdir/repbase
-mkdir -p $workdir/bgAnnotations
 
 echo "running pre-run checks.." | tee -a $paramlog 
 echo ""
@@ -236,6 +241,9 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]];then
         echo "working on bam input ($xbase, size: $size Gb)" 
         if samtools view $input | head| grep -Fq "Yt:Z:"; then
          echo "File contains read-type classification"
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
+        elif [[ "$wgs" == T ]]; then
+         echo "provided file is a WGS experiment. proceeding without pairsamtool implementation"
          samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         else
          echo "File doesnot contain read-type classification. Employing pairtools"
@@ -306,7 +314,7 @@ if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
     echo ""
     echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1"
     bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1
-    if [[ $remap=="T" ]]; then
+    if [ "$remap" == "T" ]; then
        echo ""
        echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap F -te 2"
        bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap "F" -te 2
@@ -391,6 +399,7 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.ClustObj_supportRAMcount.ph ]]; then
+    echo "genrating random locations for background model" 
     bedtools random -l 1 -n 100000 -g $chrsize > $workdir/${outprefix}_RandomLocs.bed 
     perl src/annotate_breaks.pl -in $workdir/${outprefix}.ClustObj.ph -ram $workdir/${outprefix}.RAM.sort.bam -index $index -rand $workdir/${outprefix}_RandomLocs.bed -ncores $ncores -outprefix $outprefix -wd $workdir
     if [[ $? != 0  ]]; then
@@ -425,17 +434,6 @@ MYSEC=$(date +%s)
 DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
 echo "Completed generating report" | tee -a $paramlog 
 echo Time-elapsed `date +%H:%M:%S -ud @${DIFFSEC}` 
-
-
-##################################################################################################333
-echo ""
-echo "" | tee -a $paramlog 
-echo "# Step6 (optional): Generating HTML report..." | tee -a $paramlog 
-echo ""
-Rscript src/createReport.R $outprefix $workdir
-if [[ $? != 0  ]]; then
-   echo "  {Could not generate HTML report page. One or more R-packages are missing!}"  | tee -a $paramlog 
-fi
 echo "##------------------------Completed------------------------------------"  | tee -a $paramlog 
 echo ""  | tee -a $paramlog 
 echo ""  | tee -a $paramlog 

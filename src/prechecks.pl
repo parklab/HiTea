@@ -94,4 +94,6 @@ if($polym ne ""){
   }
 }
 
-exit;
+
+
+

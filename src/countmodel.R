@@ -28,6 +28,9 @@ p$rname <- paste0("random_",1:length(p$chr))
 p <- as(p,"GRanges")
 p <- resize(p,1)
 p <- p[p$cov>0]
+#px <- subsetByOverlaps(resize(p,1001,"center"),a,ignore.strand=T)
+#p <- p[!p$rname%in%px$rname]
+#rm(px)
 
 ########################## Genrate counts
 ## 1. Genreate separate count table for all potential insertions using all transposon supporting reads
@@ -292,6 +295,52 @@ res$propable.TE <- apply(res,1,function(y){
 }) 
 a$bg.model = res$propable.TE
 a$disc <- NULL
+
+# test the performance
+if(F){
+  myf<- function(pacb){
+    h <- distanceToNearest(pacb) %>% as.data.frame()
+    h$ref <- pacb[h$queryHits]$TE
+    h$test <- pacb[h$subjectHits]$TE
+    h <- h[h$distance<100,]
+    h <- h[h$ref==h$test,]
+    h$queryHits %>% unique
+    h <- h[duplicated(t(apply(h[,1:2],1,sort))),]
+    if(nrow(h)>0){
+      pacb <- pacb[-h$queryHits]
+    }
+    pacb
+  }
+  pacb = rbind(read.delim("A:/work/RT in HiC/xTEA_simon/xTEA_pacbio_LINE1.txt",header=F),
+               read.delim("A:/work/RT in HiC/xTEA_simon/xTEA_pacbio_Alu.txt",header=F),
+               read.delim("A:/work/RT in HiC/xTEA_simon/xTEA_pacbio_SVA.txt",header=F))
+  pacb <- with(pacb,GRanges(V1,IRanges(V2,V2),"*",TE=V3))
+  pacb$TE <- gsub("LINE1","L1",pacb$TE)
+  alu <- myf(unique(pacb[pacb$TE=="Alu"]))
+  sva <- myf(unique(pacb[pacb$TE=="SVA"]))
+  l1 <- myf(unique(pacb[pacb$TE=="L1"]))
+  pacb<- c(alu,l1,sva)
+  table(pacb$TE)
+  rm(alu,sva,l1)
+  
+  a$pval <- gsub(",.*$","",gsub("^.*?,","",a$bg.model) ) %>% as.numeric
+  sum(is.na(a$pval))
+  a$pval <- ifelse(is.na(a$pval),1,a$pval)
+  a$alu <- countOverlaps(resize(a,101,"center"),pacb[pacb$TE=="Alu"],ignore.strand=T)
+  a$l1 <- countOverlaps(resize(a,101,"center"),pacb[pacb$TE=="L1"],ignore.strand=T)
+  a$sva <- countOverlaps(resize(a,101,"center"),pacb[pacb$TE=="SVA"],ignore.strand=T)
+  
+  #a$pval <- p.adjust(a$pval,method = "fdr")
+  
+  cat(sum(a$TE=="Alu" & a$pval<0.05 & a$alu>0),"\n")
+  cat(sum(a$TE=="L1" & a$pval<0.05 & a$l1>0),"\n")
+  cat(sum(a$TE=="SVA" & a$pval<0.05 & a$sva>0),"\n\n")
+  
+  cat(sum(a$TE=="Alu" & a$pval<0.05 & a$alu==0),"\n")
+  cat(sum(a$TE=="L1" & a$pval<0.05 & a$l1==0),"\n")
+  cat(sum(a$TE=="SVA" & a$pval<0.05 & a$sva==0),"\n\n")
+  
+}
 
 a <- as.data.frame(a)
 save(plotdf,file= paste0(args[2],"/",args[1],"_bgModeling.RData"))

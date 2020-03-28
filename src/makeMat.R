@@ -5,6 +5,11 @@ if (length(args)<3) {
 }
 suppressPackageStartupMessages(library(GenomicRanges,quietly = T))
 
+
+## arg1 = outprefix
+## arg2 = working directory
+# args=c("gm12878_50x","C:/d/report","Alu,L1,SVA,HERVK")
+
 m.spl <- c()
 m.unspl <- c()
 WINDOW=10010

@@ -77,7 +77,7 @@ if($help or $in eq "" or $index eq "" or $refMapqQ eq "" or $enzyme eq ""){
   print " One or more required inputs are not recognized***\n";
   help(1);
 }
-print " ERROR: makeMat.R does not exist in the same directory!\n" unless -e "makeMat.R";
+print " ERROR: makeMat.R does not exist in the same directory!\n" unless -e "src/makeMat.R";
 
 #--------------------------------------------------------------------------------------------------------------
 # Initialization
@@ -166,10 +166,23 @@ $testring =~ s/PolyA//;
 $testring=~ s/,,/,/;
 $testring=~ s/^,//;
 $testring=~ s/,$//;
-system( qq[Rscript makeMat.R $baseoutprefix $wd $testring] ) == 0 or die qq[ Cound not generate count matrices for coverage plots\n];
+system( qq[Rscript src/makeMat.R $baseoutprefix $wd $testring] ) == 0 or die qq[ Cound not generate count matrices for coverage plots\n];
 $watch_run = time();
 $run_time = $watch_run - $start_run;
 print " generated coverage matrices of RAM and split RAM around the insertion breakpoints:\t $run_time seconds\n";
+
+
+## genrate HTML report
+if(system( qq[Rscript src/createReport.R $baseoutprefix $wd] ) == 0){
+  print " generated HTML report successfully\n";
+}else{
+  print " Cound not generate HTML report. One or more R-packages are missing\n";
+}
+
+$watch_run = time();
+$run_time = $watch_run -  $start_run;
+print "[write_insertions] END:\t $run_time seconds\n\n";
+close(LOGS);
 
 exit 0;
 
@@ -832,3 +845,4 @@ sub write_clusters{
    
    return(\%clusters);
 }
+

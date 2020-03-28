@@ -182,6 +182,10 @@ sub bam_read{
          @read2 = @sam;
        }
     }
+    #if($flags{"raw"}{"counts"}{"total"}==10000 and $flags{"raw"}{"counts"}{"lonelymates"}>5000){
+    #  print " Input bamfile is not sorted by names. Exiting!\n";
+    #  exit 1;
+    #}
   }
   close(IN);
   return($line);
@@ -328,6 +332,7 @@ sub write_fq_from_bam{
      $flags{"raw"}{"counts"}{"nonHicChimera"}++;
   }
   
+  ## Use bam entry in the read header 
   ## For DE,TP/ DE,FP/ IE/FP, use the bam entry for the mate
   ## For IE,TP, use the bam entry for the other mate
   my $addum1 = "-";

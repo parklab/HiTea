@@ -79,8 +79,8 @@ if($help or $repbase eq "" or $index eq "" or $bgAnnotations eq "" or $enzyme eq
   print " One or more inputs are not recognized***\n";
   help(1);
 }
-print " ERROR: countmodel.R does not exist in the same directory!\n" unless -e "countmodel.R";
-print " ERROR: pairLocations.R does not exist in the same directory!\n" unless -e "pairLocations.R";
+print " ERROR: countmodel.R does not exist in the same directory!\n" unless -e "src/countmodel.R";
+print " ERROR: pairLocations.R does not exist in the same directory!\n" unless -e "src/pairLocations.R";
 
 
 #--------------------------------------------------------------------------------------------------------------
@@ -105,6 +105,7 @@ if($polym ne ""){
   %polymorphs = src::Utilities::get_fasta($polym);
   foreach my $i (keys %polymorphs){
    my @temp = split("~",$i); ## Family~Subfamily
+   #print " $i\t$temp[1]\t$polymorphs{$i}","bp\n"; 
    $temp[1] =~ s/\n//;
    $temp[1] =~ s/\r//;
    $crossref{$temp[1]}=$temp[0];
@@ -147,6 +148,11 @@ $run_time = $watch_run -  $start_run;
 print " finalized breakpoints with annotations:\t $run_time seconds\n";
 print "  -> total putative insertions in completed object: ", scalar(keys%clusters),"\n";
 
+my $oufilex=$outprefix.'.preFilt00'; #Save 
+open FOO,">$oufilex" or die $!;
+print FOO Dumper %clusters;
+close(FOO);
+
 ## subfamily annotations of the putative insertions
 $clust = subfamily_annotation(\%clusters);
 %clusters = %{$clust};
@@ -179,6 +185,11 @@ print " performed background enrichment:\t $run_time seconds\n";
 print "  -> total putative insertions in completed object: ", scalar(keys%clusters),"\n";
 store \%clusters, $outprefix.'.ClustObj_PutativeInsertions.ph'; #Save
 
+
+my $oufile=$outprefix.'.preFilt'; #Save 
+open FOO,">$oufile" or die $!;
+print FOO Dumper %clusters;
+close(FOO);
 
 $watch_run = time();
 $run_time = $watch_run - $start_run;
@@ -418,7 +429,7 @@ sub merge_cluster_entries{
   close(FC);
   
   ## Find cluster of clip coordinates based on read mapping span atthe clip location
-  if(system("Rscript pairLocations.R $out $fname")==0){
+  if(system("Rscript src/pairLocations.R $out $fname")==0){
     print "  -> Generated list of breakpoint pairs!\n";
     #system("rm $out");    
   }else{
@@ -1007,7 +1018,7 @@ sub perform_bg_enrichment{
   close(FO);
   
   my $testring = join(",",@features);
-  system("Rscript countmodel.R $baseoutprefix $wd $pval_cutoff $testring $refMapqQ $TEMapScore")==0 or die qq[ ERROR while running background enrichment model. Exiting !! \n];     
+  system("Rscript src/countmodel.R $baseoutprefix $wd $pval_cutoff $testring $refMapqQ $TEMapScore")==0 or die qq[ ERROR while running background enrichment model. Exiting !! \n];     
   
   open(I,"<",$wd."/".$baseoutprefix.".temp.bgModeledInsertions.txt") or die "Can't open bgModeled cluster file\n";
   while(<I>){
@@ -1042,3 +1053,5 @@ sub perform_bg_enrichment{
   close(I);
   return(\%clusters); 
 }
+
+###################
