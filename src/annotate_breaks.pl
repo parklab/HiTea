@@ -158,10 +158,10 @@ my $clust = count_read_support_from_RAM($ram,\%clusters);
 %clusters =%{$clust};
 store \%clusters, $outprefix.'.ClustObj_supportRAMcount.ph'; #Save 
 
-my $oufile=$outprefix.'.RAM.clusters'; #Save 
-open FOO,">$oufile" or die $!;
-print FOO Dumper %clusters;
-close(FOO);
+#my $oufile=$outprefix.'.RAM.clusters'; #Save 
+#open FOO,">$oufile" or die $!;
+#print FOO Dumper %clusters;
+#close(FOO);
 
 ## generate genomic range objects for the supporting reads
 undef %clusters;

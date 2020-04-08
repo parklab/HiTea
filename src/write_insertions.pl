@@ -153,10 +153,10 @@ $clust = write_clusters(\%clusters);
 $watch_run = time();
 $run_time = $watch_run -  $start_run;
 
-my $oufile=$outprefix.'.finalFilt'; #Save 
-open FOO,">$oufile" or die $!;
-print FOO Dumper %clusters;
-close(FOO);
+#my $oufile=$outprefix.'.finalFilt'; #Save 
+#open FOO,">$oufile" or die $!;
+#print FOO Dumper %clusters;
+#close(FOO);
 print " wrote insertion breakpoint report:\t $run_time seconds\n";
 
 
@@ -592,10 +592,6 @@ sub filter_clusters{
          }elsif(defined $clusters{$loc}{pos1}{PolyA} and exists $clusters{$loc}{pos2} and defined $clusters{$loc}{pos2}{PolyA}){
            $chk++;     
          }
-         if($chk>0){
-           #$clusters{$loc}{final}{$feature}{status} = 0;
-           #$clusters{$loc}{final}{$feature}{remark} = "STR?;";
-         } 
        }
        ## Indel?
        if($clusters{$loc}{final}{$tsp}{insert_size}!~ /NA/ and $clusters{$loc}{final}{$tsp}{insert_size} < $INDEL_CUTOFF){
@@ -771,6 +767,7 @@ sub write_clusters{
    ## (6) : Write insertion output to a file
    my $file = $outprefix.".candidate.insertions.bed";
    open FO ,"> $file" or die $!;
+   
    my $clustnum=0;
    print FO "########################################################################################\n";
    print FO "##HiTEA report: V1.0\n";
@@ -796,7 +793,6 @@ sub write_clusters{
         print FO "$clusters{$loc}{final}{$feature}{status}\t";
         ## info related to cluster
         print FO "TSD=$clusters{$loc}{final}{TSD};SUBFAMILY=$clusters{$loc}{final}{$feature}{subfamily};";
-
         print FO "TE=$clusters{$loc}{final}{$feature}{lte},$clusters{$loc}{final}{$feature}{rte};";
         print FO "POLYA=$clusters{$loc}{final}{$feature}{lpoly},$clusters{$loc}{final}{$feature}{rpoly};";
         print FO "TAIL=$clusters{$loc}{final}{tailinfo};isPolyA=$clusters{$loc}{final}{isPolyA};";

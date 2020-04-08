@@ -84,10 +84,10 @@ if(exists $omtcl{"0 softclipped reads"}){
 }
 print "[finalize_breaks] END:\t $run_time_end seconds\n";
 
-my $oufile=$outprefix.'.Obj.clusters'; #Save 
-open FOO,">$oufile" or die $!;
-print FOO Dumper %clusters;
-close(FOO);
+#my $oufile=$outprefix.'.Obj.clusters'; #Save 
+#open FOO,">$oufile" or die $!;
+#print FOO Dumper %clusters;
+#close(FOO);
 exit 0;
 
 #--------------------------------------------------------------------------------------------------------------

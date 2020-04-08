@@ -148,10 +148,10 @@ $run_time = $watch_run -  $start_run;
 print " finalized breakpoints with annotations:\t $run_time seconds\n";
 print "  -> total putative insertions in completed object: ", scalar(keys%clusters),"\n";
 
-my $oufilex=$outprefix.'.preFilt00'; #Save 
-open FOO,">$oufilex" or die $!;
-print FOO Dumper %clusters;
-close(FOO);
+#my $oufilex=$outprefix.'.preFilt00'; #Save 
+#open FOO,">$oufilex" or die $!;
+#print FOO Dumper %clusters;
+#close(FOO);
 
 ## subfamily annotations of the putative insertions
 $clust = subfamily_annotation(\%clusters);
@@ -186,10 +186,10 @@ print "  -> total putative insertions in completed object: ", scalar(keys%cluste
 store \%clusters, $outprefix.'.ClustObj_PutativeInsertions.ph'; #Save
 
 
-my $oufile=$outprefix.'.preFilt'; #Save 
-open FOO,">$oufile" or die $!;
-print FOO Dumper %clusters;
-close(FOO);
+#my $oufile=$outprefix.'.preFilt'; #Save 
+#open FOO,">$oufile" or die $!;
+#print FOO Dumper %clusters;
+#close(FOO);
 
 $watch_run = time();
 $run_time = $watch_run - $start_run;

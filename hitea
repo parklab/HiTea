@@ -157,8 +157,8 @@ if ! [[ -x $(command -v bwa mem) ]]; then
     echo 'bwa suit not found. make sure to set the path variable right and try again. exiting! ' >&2
     exit 1
 fi
-if ! [[ -x $(command -v pairsamtools parse --help) ]]; then
-    echo 'pairsamtools suite is not installed. make sure to set the path variable right and try again. exiting! ' >&2   
+if ! [[ -x $(command -v pairtools parse --help) ]]; then
+    echo 'pairtools suite is not installed. make sure to set the path variable right and try again. exiting! ' >&2   
     exit 1
 fi
 if ! [[ -x $(command -v bedtools) ]]; then
@@ -243,11 +243,11 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]];then
          echo "File contains read-type classification"
          samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         elif [[ "$wgs" == T ]]; then
-         echo "provided file is a WGS experiment. proceeding without pairsamtool implementation"
+         echo "provided file is a WGS experiment. proceeding without pairtool implementation"
          samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         else
          echo "File doesnot contain read-type classification. Employing pairtools"
-         samtools view -@ 8 $input| pairsamtools parse -c $chrsize $input | pairsamtools split --output-sam - | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme"  -q "$anchor_mapq" 
+         samtools view -@ 8 $input| pairtools parse -c $chrsize $input | pairtools split --output-sam - | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme"  -q "$anchor_mapq" 
         fi
       else
          echo " can't work with provided input file ${inputs[0]}. Exiting! "
@@ -426,9 +426,12 @@ if ! [[ -e $workdir/${outprefix}.candidate.insertions.bed ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
     fi
+    echo "removing intermediate files" | tee -a $paramlog 
+    rm $workdir/*.temp.*
 else
   echo "Candidate insertion report is already generated"
 fi
+
 
 MYSEC=$(date +%s)
 DIFFSEC=`expr ${MYSEC} - ${STARTSEC}`
