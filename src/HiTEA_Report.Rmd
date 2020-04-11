@@ -95,9 +95,14 @@ datatable(dt, extensions = 'Buttons',options = list(searching = TRUE,pageLength 
 
 ```{r oriqc, warning=F,echo=F,fig.width=6,fig.height=5}
  file=paste0(params$dir,"/",params$outprefix,".ReadPairInsertSizeOriSummary.logs.gz")
-  pl <- read.delim(file = paste0(file),header = F)
+ size <- readLines(file)
+ 
+ if(length(size)==0 ){
+   cat(" ReadPair insert size file was found empty\n")
+ }else{
+   pl <- read.delim(file = paste0(file),header = F)
   
-  ggplot(pl,aes(x=V1,y=log10(V3),col=V2))+geom_line(size=1.5)+
+   ggplot(pl,aes(x=V1,y=log10(V3),col=V2))+geom_line(size=1.5)+
     theme_bw()+ xlab("inter-mate distance, log10")+ ylab("number of reads, log10")+
     geom_vline(xintercept = c(3,3.3),col="gray",linetype="dashed")+
     theme(axis.title = element_text(size=18,color="black"),
@@ -105,6 +110,8 @@ datatable(dt, extensions = 'Buttons',options = list(searching = TRUE,pageLength 
           legend.position = "top",
           legend.text = element_text(size=16,colour = "black"),
           legend.title = element_blank())
+   
+ }
 
 ```
 
@@ -119,7 +126,7 @@ datatable(dt, extensions = 'Buttons',options = list(searching = TRUE,pageLength 
     * mean vs standard deviation relationship between the randomly selected loci
     * p-value distribution from the model
 
-```{r modeling, warning=F,echo=F,fig.width=12,fig.height=16}
+```{r modeling, warning=F,echo=F,fig.width=12,fig.height=12}
 file=paste0(params$dir,"/",params$outprefix,"_bgModeling.RData")
 load(paste0(file))
 

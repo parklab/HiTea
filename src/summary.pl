@@ -8,6 +8,9 @@ use Data::Dumper;
 use constant { true => 1, false => 0 };
 use utf8;
 use Storable;
+use File::Basename qw(dirname);
+use Cwd  qw(abs_path);
+use lib dirname(dirname abs_path $0);
 use src::Utilities;
 use open qw(:std :utf8);
 BEGIN { our $start_run = time(); }

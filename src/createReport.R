@@ -10,10 +10,11 @@ suppressPackageStartupMessages(library(rmarkdown,quietly = T))
 suppressPackageStartupMessages(library(ggplot2,quietly = T))
 suppressPackageStartupMessages(library(EnrichedHeatmap,quietly = T))
 suppressPackageStartupMessages(library(circlize,quietly = T))
-#suppressPackageStartupMessages(library(kableExtra,quietly = T,lib.loc = lib_path))
-#suppressPackageStartupMessages(library(DT,quietly = T,lib.loc = lib_path))
+suppressPackageStartupMessages(library(kableExtra,quietly = T))
+suppressPackageStartupMessages(library(DT,quietly = T))
 
-rmarkdown::render('HiTEA_Report.Rmd',params = list(dir=args[2],outprefix=args[1]),output_dir = args[2])
+rmarkdown::render('src/HiTEA_Report.Rmd',params = list(dir=args[2],outprefix=args[1]),output_dir = args[2])
+#rmarkdown::render('src/HiTEA_Report.Rmd',params = list(dir='/usr/local/bin/test_out',outprefix='test'),output_dir = '/usr/local/bin/tset_out')
 #rmarkdown::render('A:/work/scripts/TE_insertions/final/v1.3/markdownfile.Rmd',params = list(dir="C:/d/temp/plots",outprefix="gm12878_20xsb"),output_dir = "C:/d/temp/plots")
 
 

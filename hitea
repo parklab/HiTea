@@ -159,7 +159,7 @@ if ! [[ -x $(command -v bwa mem) ]]; then
 fi
 if ! [[ -x $(command -v pairtools parse --help) ]]; then
     echo 'pairtools suite is not installed. make sure to set the path variable right and try again. exiting! ' >&2   
-    exit 1
+    #exit 1
 fi
 if ! [[ -x $(command -v bedtools) ]]; then
     echo 'bedtools not found. make sure to set the path variable right and try again. exiting! ' >&2
@@ -346,7 +346,7 @@ if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
       echo "ERROR : RAM bed files are either not written/merged properly" | tee -a $paramlog 
       exit 1
     fi
-    samtools sort -@ $tot_threads -m 1G -o $workdir/${outprefix}.RAM.sort.bam $workdir/${outprefix}.RAM.bam
+    samtools sort -@ 4 -m 1G -o $workdir/${outprefix}.RAM.sort.bam $workdir/${outprefix}.RAM.bam
     samtools index $workdir/${outprefix}.RAM.sort.bam
     size=$(($(wc -c < "$workdir/${outprefix}.RAM.sort.bam") +0))
     if [[ $size < 100 ]]; then
@@ -364,17 +364,24 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.sort.merge.clust.bed.gz ]]; then
-    ls $workdir/*temp.clusters.bed | parallel -eta --verbose cat {} >> $workdir/${outprefix}.clusters.bed
-    sort -k1,1 -k2,2n --parallel=$ncores -T $tempdir -s -S 4G $workdir/${outprefix}.clusters.bed > $workdir/${outprefix}.sort.clusters.bed
-    bedtools merge -iobuf 100M -d $gap -s -c 7 -o collapse -i $workdir/${outprefix}.sort.clusters.bed | gzip -c - > $workdir/${outprefix}.sort.merge.clust.bed.gz
+    cat $workdir/*temp.clusters.bed > $workdir/${outprefix}.clusters.bed
+    sort -k1,1 -k2,2n --parallel=2 -T $tempdir -s -S 1G $workdir/${outprefix}.clusters.bed > $workdir/${outprefix}.sort.clusters.bed
+     ## bedtools v2.27.1 seems to behave differently from v2.26.0
+    bedtools merge -iobuf 100M -d $gap -S + -c 7 -o collapse -i $workdir/${outprefix}.sort.clusters.bed | awk -F '\t' '{print $1"\t"$2"\t"$3"\t+\t"$NF}' > $workdir/${outprefix}.sort_1.temp.merge.clust.bed
+    bedtools merge -iobuf 100M -d $gap -S - -c 7 -o collapse -i $workdir/${outprefix}.sort.clusters.bed | awk -F '\t' '{print $1"\t"$2"\t"$3"\t-\t"$NF}' > $workdir/${outprefix}.sort_2.temp.merge.clust.bed
+    cat $workdir/*.temp.merge.clust.bed > $workdir/${outprefix}.sort.merge.clust.bed
+    sort -k1,1 -k2,2n --parallel=2 -T $tempdir -s -S 1G $workdir/${outprefix}.sort.merge.clust.bed | gzip -c - > $workdir/${outprefix}.sort.merge.clust.bed.gz
+     ## check size
     size=$(($(wc -c < "$workdir/${outprefix}.clusters.bed") +0))
     if [[ $size < 100 ]]; then
       echo "ERROR : Clusters bed files are either not written/merged properly" | tee -a $paramlog 
       exit 1
     fi
     rm $workdir/*temp.clusters.bed
-    rm $workdir/${outprefix}.sort.clusters.bed
     rm $workdir/${outprefix}.clusters.bed
+    rm $workdir/${outprefix}.sort.clusters.bed
+    rm $workdir/*.temp.merge.clust.bed
+    rm $workdir/${outprefix}.sort.merge.clust.bed
 else
     echo "Cluster file is already merged and sorted"
 fi
