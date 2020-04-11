@@ -159,7 +159,7 @@ if ! [[ -x $(command -v bwa mem) ]]; then
 fi
 if ! [[ -x $(command -v pairtools parse --help) ]]; then
     echo 'pairtools suite is not installed. make sure to set the path variable right and try again. exiting! ' >&2   
-    #exit 1
+    exit 1
 fi
 if ! [[ -x $(command -v bedtools) ]]; then
     echo 'bedtools not found. make sure to set the path variable right and try again. exiting! ' >&2
