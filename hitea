@@ -77,16 +77,25 @@ if [[ -z $genome && -z $index && -z $bgAnnotations && -z $repbase ]]; then
     printHelpAndExit 0
 fi
 
+## get the source directory (adopted script)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do 
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
 if [[ $genome == "hg38" ]]; then
-    index=hg38/TEConsensus_Hs.fa
-    repbase=hg38/Repbase_Hs.fa
-    bgAnnotations=hg38/bgRepeats_hg38.bed.gz
-    indexP=hg38/Polymorphs_Hs.fa
+    index=${DIR}/hg38/TEConsensus_Hs.fa
+    repbase=${DIR}/hg38/Repbase_Hs.fa
+    bgAnnotations=${DIR}/hg38/bgRepeats_hg38.bed.gz
+    indexP=${DIR}/hg38/Polymorphs_Hs.fa
 elif [[ $genome == "hg19" ]]; then
-    index=hg19/TEConsensus_Hs.fa
-    repbase=hg19/Repbase_Hs.fa
-    bgAnnotations=hg19/bgRepeats_hg38.bed.gz
-    indexP=hg19/Polymorphs_Hs.fa
+    index=${DIR}/hg19/TEConsensus_Hs.fa
+    repbase=${DIR}/hg19/Repbase_Hs.fa
+    bgAnnotations=${DIR}/hg19/bgRepeats_hg38.bed.gz
+    indexP=${DIR}/hg19/Polymorphs_Hs.fa
 fi
 
 tempdir=$workdir/tmp
@@ -142,6 +151,7 @@ fi
 echo " -threads (used)      $tot_threads" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo "command: hitea -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
+echo " sourceDirectory      $DIR" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo "" | tee -a $paramlog  
 
@@ -201,8 +211,8 @@ fi
 bgAnnotations=$workdir/bgAnnotations
 echo ""
 echo "  3. confirming TE family and subfamily names.." | tee -a $paramlog 
-echo "perl src/prechecks.pl -index $index -polym $indexP -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme"
-perl src/prechecks.pl -index $index -polym $indexP -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme
+echo "perl $DIR/src/prechecks.pl -index $index -polym $indexP -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme"
+perl $DIR/src/prechecks.pl -index $index -polym $indexP -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme
 if [[ $? != 0  ]]; then
    echo "  ->Something went wrong during precheck step! " | tee -a $paramlog 
    exit 1
@@ -241,13 +251,13 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]];then
         echo "working on bam input ($xbase, size: $size Gb)" 
         if samtools view $input | head| grep -Fq "Yt:Z:"; then
          echo "File contains read-type classification"
-         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl "$DIR"/src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         elif [[ "$wgs" == T ]]; then
          echo "provided file is a WGS experiment. proceeding without pairtool implementation"
-         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
+         samtools view -@ $ncores $input | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl "$DIR"/src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme" -q "$anchor_mapq"
         else
          echo "File doesnot contain read-type classification. Employing pairtools"
-         samtools view -@ 8 $input| pairtools parse -c $chrsize $input | pairtools split --output-sam - | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme"  -q "$anchor_mapq" 
+         samtools view -@ 8 $input| pairtools parse -c $chrsize $input | pairtools split --output-sam - | time parallel --resume-failed --memfree 1G --joblog $workdir/${xbase}_temp.parseGNU.log --tmpdir $tempdir --pipe --block $chunk perl "$DIR"/src/parse.pl -bam - -outprefix "$xbase"_part_{#} -wd "$workdir" -clip "$clip" -e "$enzyme"  -q "$anchor_mapq"
         fi
       else
          echo " can't work with provided input file ${inputs[0]}. Exiting! "
@@ -279,7 +289,7 @@ if ! [[ -e $workdir/${outprefix}_1.fq.gz ]]; then
     rm $workdir/*temp2.fq.gz
     ## 2.
     if ! [[ -e $workdir/${outprefix}.ReadSummary.logs ]]; then
-      perl src/summary.pl -outprefix $outprefix -wd $workdir
+      perl $DIR/src/summary.pl -outprefix $outprefix -wd $workdir
       size=$(($(wc -c < "$workdir/${outprefix}.ReadSummary.logs") +0))
       if [[ $size > 0 ]]; then
         rm $workdir/*_part*.summary.log.ph
@@ -312,17 +322,17 @@ echo "# Step3 : Extracting clusters  ... " | tee -a $paramlog
 echo " Mapping merged fastq file and extracting clusters"
 if ! [[ -e $workdir/${outprefix}.RAM.sort.bam ]]; then
     echo ""
-    echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1"
-    bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1
+    echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1"
+    bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $index $workdir/${outprefix}_1.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap $remap -te 1
     if [ "$remap" == "T" ]; then
        echo ""
-       echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap F -te 2"
-       bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap "F" -te 2
+       echo " bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap F -te 2"
+       bwa mem -t $tot_threads -a -v 1 -k 13 -T $clip $indexP $workdir/${outprefix}_1.1.temp.remap.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_1 -wd $workdir -hd $workdir/headers.sam -remap "F" -te 2
        rm $workdir/*.temp.remap.fq.gz
     fi    
     echo ""
-    echo "bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam"
-    bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl src/find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam     
+    echo "bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam"
+    bwa mem -t $tot_threads -a -v 1 -k 19 -T 30 $index $workdir/${outprefix}_2.fq.gz | perl $DIR/src/find_breaks.pl -bam - -outprefix ${outprefix}_2 -wd $workdir -hd $workdir/headers.sam     
     if [[ $? != 0  ]]; then
       echo "Error in cluster extraction step " | tee -a $paramlog 
       exit 1
@@ -396,7 +406,7 @@ echo ""
 echo "" | tee -a $paramlog 
 echo "# Step5 : Merging breakpoints and generating report..." | tee -a $paramlog 
 if ! [[ -e $workdir/${outprefix}.ClustObj.ph ]]; then 
-    perl src/finalize_breaks.pl -in $workdir/${outprefix}.sort.merge.clust.bed.gz -wd $workdir -outprefix $outprefix -algnscore $clip
+    perl $DIR/src/finalize_breaks.pl -in $workdir/${outprefix}.sort.merge.clust.bed.gz -wd $workdir -outprefix $outprefix -algnscore $clip
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
@@ -408,7 +418,7 @@ fi
 if ! [[ -e $workdir/${outprefix}.ClustObj_supportRAMcount.ph ]]; then
     echo "genrating random locations for background model" 
     bedtools random -l 1 -n 100000 -g $chrsize > $workdir/${outprefix}_RandomLocs.bed 
-    perl src/annotate_breaks.pl -in $workdir/${outprefix}.ClustObj.ph -ram $workdir/${outprefix}.RAM.sort.bam -index $index -rand $workdir/${outprefix}_RandomLocs.bed -ncores $ncores -outprefix $outprefix -wd $workdir
+    perl $DIR/src/annotate_breaks.pl -in $workdir/${outprefix}.ClustObj.ph -ram $workdir/${outprefix}.RAM.sort.bam -index $index -rand $workdir/${outprefix}_RandomLocs.bed -ncores $ncores -outprefix $outprefix -wd $workdir -dir $DIR
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
@@ -418,7 +428,7 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.ClustObj_PutativeInsertions.ph ]]; then 
-    perl src/putative_insertions.pl -in $workdir/${outprefix}.ClustObj_supportRAMcount.ph -polym $indexP -index $index -repbase $repbase -q $anchor_mapq -bgAnnotations $bgAnnotations -enzyme $enzyme -ncores $ncores -outprefix $outprefix -wd $workdir
+    perl $DIR/src/putative_insertions.pl -in $workdir/${outprefix}.ClustObj_supportRAMcount.ph -polym $indexP -index $index -repbase $repbase -q $anchor_mapq -bgAnnotations $bgAnnotations -enzyme $enzyme -ncores $ncores -outprefix $outprefix -wd $workdir -dir $DIR
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1
@@ -428,7 +438,7 @@ else
 fi
 
 if ! [[ -e $workdir/${outprefix}.candidate.insertions.bed ]]; then 
-    perl src/write_insertions.pl -in $workdir/${outprefix}.ClustObj_PutativeInsertions.ph -outprefix $outprefix -q $anchor_mapq  -e $enzyme -wd $workdir -index $index -polym $indexP
+    perl $DIR/src/write_insertions.pl -in $workdir/${outprefix}.ClustObj_PutativeInsertions.ph -outprefix $outprefix -q $anchor_mapq  -e $enzyme -wd $workdir -index $index -polym $indexP -dir $DIR
     if [[ $? != 0  ]]; then
       echo "Error in parsing step " | tee -a $paramlog 
       exit 1

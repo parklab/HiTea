@@ -6,6 +6,7 @@ if [[ $size < 10 ]]; then
   exit 1  
 else
   mv test_out/test.candidate.insertions.bed examples/test.candidate.insertions.bed
+  mv test_out/HiTEA_Report.html examples/HiTEA_Report_test.html
   rm -r -f test_out
   exit 0
 fi

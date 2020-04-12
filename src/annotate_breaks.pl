@@ -30,6 +30,7 @@ my $ncores=4;
 my $outprefix="project";
 my $algnscore = 20;
 my $gap =2;
+my $dir ="";
 my $help=0;
 my $wd = "";
 Getopt::Long::GetOptions(
@@ -41,6 +42,7 @@ Getopt::Long::GetOptions(
   'algnscore:s'      => \$algnscore,
   'gap=s'            => \$gap,
   'wd:s'             => \$wd,
+  'dir:s'            => \$dir,
   'ncores:s'         => \$ncores,
   'help'             => \$help,
   'h'                => \$help,
@@ -48,7 +50,7 @@ Getopt::Long::GetOptions(
 sub help{
   my $j = shift;
   if($j){
-   print "\nUsage: perl annotate_breaks.pl -in [FILE_PATH] -ram [FILE_PATH] -outprefix [STRING] -index [TE_MergedIndex] -rand [FILE] -ncores [INT] -algnscore [INT] -gap [INT] -wd [DIR_PATH]\n\n";
+   print "\nUsage: perl annotate_breaks.pl -in [FILE_PATH] -ram [FILE_PATH] -outprefix [STRING] -index [TE_MergedIndex] -rand [FILE] -ncores [INT] -algnscore [INT] -gap [INT] -wd [DIR_PATH] -dir [BASEDIR]\n\n";
    print "This program annotates finalized breaks using the bam file\n\n";
    print "Options:\n\n";
    print "***required:\n";
@@ -61,6 +63,7 @@ sub help{
    print "  -wd                    Working directory [default: ~]\n";
    print "  -algnscore             alignment score threshold [default: 20] \n";
    print "  -gap                   gap used to merge the breakpoints [default: 2] \n";
+   print "  -dir                   base directory [default: ] \n";
    print "  -ncores                Number of threads while reading bam input [default: 4]\n";
    print "  -help|-h               Display usage information.\n\n\n";
    exit 1;
@@ -91,7 +94,7 @@ my %randLocs;
 my $watch_run = time();
 my $run_time = $watch_run - our $start_run;
 print "[annotate_breaks] START:\t $run_time seconds\n";
-print " Command: perl annotate_breaks.pl -in $in -ram $ram -index $index -rand $rand -outprefix -ncores $ncores $outprefix -wd $wd \n";
+print " Command: perl annotate_breaks.pl -in $in -ram $ram -index $index -rand $rand -outprefix -ncores $ncores $outprefix -wd $wd -dir $dir\n";
 
 ## get transposons
 %transposons = src::Utilities::get_fasta($index);
@@ -175,7 +178,11 @@ foreach my $te (@TEELEMENTS){
   my $file = $outprefix."_".$te."_supportingreads.txt";
   my $tegr = $wd."/".$baseoutprefix."_".$te;
   print qq[ creating GRange..  ];    ##(1)chr,(2)start,(3)end,(4)id,(5)strand,(6)evi,(7)clip, (8)refMapqQ, (9)TEMapScore, (10) TE_strand (11) 
-  system( qq[Rscript src/generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
+  if($dir ne ""){
+    system( qq[Rscript $dir/src/generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
+  }else{
+    system( qq[Rscript src/generateRanges.R $file $tegr] ) == 0 or die qq[ Cound not create GRange Object for $te1\n];
+  }
   print qq[ cleaning up..  ];    
   system( qq[rm $file]) == 0 or die qq[ Error in deleting intermetidate files for $te1 \n];            
   print qq[ Done\n];

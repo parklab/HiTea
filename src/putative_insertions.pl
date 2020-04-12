@@ -31,6 +31,7 @@ my $enzyme ="";
 my $refMapqQ = 28;
 my $polym ="";
 my $wd = "";
+my $dir ="";
 my $outprefix="project";
 my $ncores=4;
 my $TEMapScore = 30;
@@ -47,6 +48,7 @@ Getopt::Long::GetOptions(
   'q=s'              => \$refMapqQ,
   'clip=s'           => \$clip,
   'wd:s'             => \$wd,
+  'dir:s'            => \$dir,
   'ncores:s'         => \$ncores,
   'help'             => \$help,
   'h'                => \$help,
@@ -54,7 +56,7 @@ Getopt::Long::GetOptions(
 sub help{
   my $j = shift;
   if($j){
-   print "\nUsage: perl putative_insertions.pl -in [FILE_PATH] -outprefix [STRING] -polym [PATH] -q [refMapqQ] -index [PATH] -repbase [PATH] -bgAnnotations [DIRPATH] -clip [INT] -enzyme [STRING] -ncores [INT] -wd [DIR_PATH]\n\n";
+   print "\nUsage: perl putative_insertions.pl -in [FILE_PATH] -outprefix [STRING] -polym [PATH] -q [refMapqQ] -index [PATH] -repbase [PATH] -bgAnnotations [DIRPATH] -clip [INT] -enzyme [STRING] -ncores [INT] -wd [DIR_PATH] -dir [BASEDIR]\n\n";
    print "This program annotates finalized breaks using the bam file\n\n";
    print "Options:\n\n";
    print "***required:\n";
@@ -69,6 +71,7 @@ sub help{
    print "  -outprefix             Outputprefix for generating 2 output files (default: project) \n";
    print "  -polym                 TE polymorphic example cases index (generated using BWA)\n";
    print "  -wd                    Working directory (default: ~)\n";
+   print "  -dir                   base directory [default: ] \n";
    print "  -ncores                Number of threads while reading bam input (default: 4)\n";
    print "  -help|-h               Display usage information.\n\n\n";
    exit 1;
@@ -98,7 +101,7 @@ my %clusters;
 my $watch_run = time();
 my $run_time = $watch_run - our $start_run;
 print "[putative_insertions] START:\t $run_time seconds\n";
-print " Command: perl putative_insertions.pl -in $in -index $index -polym $polym -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme -ncores $ncores -outprefix $baseoutprefix -wd $wd \n";
+print " Command: perl putative_insertions.pl -in $in -index $index -polym $polym -repbase $repbase -bgAnnotations $bgAnnotations -enzyme $enzyme -ncores $ncores -outprefix $baseoutprefix -wd $wd -dir $dir\n";
 
 
 ## get transposons
@@ -432,9 +435,10 @@ sub merge_cluster_entries{
   close(FC);
   
   ## Find cluster of clip coordinates based on read mapping span atthe clip location
-  if(system("Rscript src/pairLocations.R $out $fname")==0){
+  if($dir ne "" and system("Rscript $dir/src/pairLocations.R $out $fname")==0){
     print "  -> Generated list of breakpoint pairs!\n";
-    #system("rm $out");    
+  }elsif($dir eq "" and system("Rscript src/pairLocations.R $out $fname")==0){
+    print "  -> Generated list of breakpoint pairs!\n";
   }else{
     print qq[ Error occured while merging the clusters: \n"
               Possible reason (1): GenomicRanges package not installed\n";
@@ -1021,7 +1025,11 @@ sub perform_bg_enrichment{
   close(FO);
   
   my $testring = join(",",@features);
-  system("Rscript src/countmodel.R $baseoutprefix $wd $pval_cutoff $testring $refMapqQ $TEMapScore")==0 or die qq[ ERROR while running background enrichment model. Exiting !! \n];     
+  if($dir eq ""){
+    system("Rscript src/countmodel.R $baseoutprefix $wd $pval_cutoff $testring $refMapqQ $TEMapScore")==0 or die qq[ ERROR while running background enrichment model. Exiting !! \n];     
+  }else{
+    system("Rscript $dir/src/countmodel.R $baseoutprefix $wd $pval_cutoff $testring $refMapqQ $TEMapScore")==0 or die qq[ ERROR while running background enrichment model. Exiting !! \n];     
+  }
   
   open(I,"<",$wd."/".$baseoutprefix.".temp.bgModeledInsertions.txt") or die "Can't open bgModeled cluster file\n";
   while(<I>){

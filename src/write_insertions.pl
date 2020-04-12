@@ -34,6 +34,7 @@ my $gap = 2;
 my $enzyme = "";
 my $readlen=100;
 my $min_reads=3;
+my $dir ="";
 my $help=0;
 my $wd = "";
 Getopt::Long::GetOptions(
@@ -47,13 +48,14 @@ Getopt::Long::GetOptions(
   'q=s'              => \$refMapqQ,
   'outprefix=s'      => \$outprefix,
   'wd:s'             => \$wd,
+  'dir:s'            => \$dir,
   'help'             => \$help,
   'h'                => \$help,
 ) or die "Incorrect input! Use -h for usage.\n";
 sub help{
   my $j = shift;
   if($j){
-   print "\nUsage: perl write_insertions.pl -in [FILE_PATH] -outprefix [STRING] -gap [INT] -readlen [INT] -e [STRING] -q [referenceMAPQ] -min_reads [INT] -index [TE_MergedIndex] -polym [TE_MergedIndex] -wd [DIR_PATH]\n\n";
+   print "\nUsage: perl write_insertions.pl -in [FILE_PATH] -outprefix [STRING] -gap [INT] -readlen [INT] -e [STRING] -q [referenceMAPQ] -min_reads [INT] -index [TE_MergedIndex] -polym [TE_MergedIndex] -wd [DIR_PATH] -dir [BASEDIR]\n\n";
    print "This program annotates finalized breaks using the bam file\n\n";
    print "Options:\n\n";
    print "***required:\n";
@@ -68,6 +70,7 @@ sub help{
    print "  -readlen               sequencing read length [default: 100] \n";
    print "  -outprefix             Outputprefix for generating 2 output files [default: project] \n";
    print "  -wd                    Working directory [default: ~]\n";
+   print "  -dir                   base directory [default: ] \n";
    print "  -help|-h               Display usage information.\n\n\n";
    exit 1;
   }
@@ -127,7 +130,7 @@ open(LOGS,"| gzip -c - > $olog") or die $!;
 my $watch_run = time();
 my $run_time = $watch_run - our $start_run;
 print "\n\n[write_insertions] START:\t $run_time seconds\n";
-print " Command: perl write_insertions.pl -in $in -index $index -polym $polym -q $refMapqQ -gap $gap -e $enzyme -min_reads $min_reads -readlen $readlen -outprefix $baseoutprefix -wd $wd \n\n";
+print " Command: perl write_insertions.pl -in $in -index $index -polym $polym -q $refMapqQ -gap $gap -e $enzyme -min_reads $min_reads -readlen $readlen -outprefix $baseoutprefix -wd $wd -dir $dir \n\n";
 
 
 %cov = %{retrieve($outprefix.".coverage.ph")};
@@ -169,14 +172,20 @@ $testring =~ s/PolyA//;
 $testring=~ s/,,/,/;
 $testring=~ s/^,//;
 $testring=~ s/,$//;
-system( qq[Rscript src/makeMat.R $baseoutprefix $wd $testring] ) == 0 or die qq[ Cound not generate count matrices for coverage plots\n];
+if($dir ne ""){
+  system( qq[Rscript $dir/src/makeMat.R $baseoutprefix $wd $testring] ) == 0 or die qq[ Cound not generate count matrices for coverage plots\n];
+}else{
+  system( qq[Rscript src/makeMat.R $baseoutprefix $wd $testring] ) == 0 or die qq[ Cound not generate count matrices for coverage plots\n];
+}
 $watch_run = time();
 $run_time = $watch_run - $start_run;
 print " generated coverage matrices of RAM and split RAM around the insertion breakpoints:\t $run_time seconds\n";
 
 
 ## genrate HTML report
-if(system( qq[Rscript src/createReport.R $baseoutprefix $wd] ) == 0){
+if($dir ne "" and system( qq[Rscript $dir/src/createReport.R $baseoutprefix $wd $dir] ) == 0){
+  print " generated HTML report successfully\n";
+}elsif($dir eq "" and system( qq[Rscript src/createReport.R $baseoutprefix $wd $dir] ) == 0){
   print " generated HTML report successfully\n";
 }else{
   print " Cound not generate HTML report. One or more R-packages are missing\n";
