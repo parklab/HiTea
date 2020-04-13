@@ -88,9 +88,9 @@ RUN apt-get autoclean && apt-get clean
 RUN rm samtools-1.7.tar.bz2 && rm v0.7.17.tar.gz
 
 # hitea 0.1.01
-RUN wget https://github.com/parklab/HiTea/archive/0.1.01.tar.gz \
-        && tar -xzf 0.1.01.tar.gz \
-        && rm 0.1.01.tar.gz    
+RUN wget https://github.com/parklab/HiTea/archive/0.1.3.tar.gz \
+        && tar -xzf 0.1.3.tar.gz \
+        && rm 0.1.3.tar.gz    
 
 
 # Copy script and data directory
