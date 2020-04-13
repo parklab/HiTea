@@ -1,0 +1,76 @@
+{% set name = "hitea" %}
+{% set version = "0.1.01" %}
+
+package:
+  name: hitea
+  version: {{ version }}
+
+source:
+  fn: {{ name }}-{{ version}}.tar.gz
+  url: https://github.com/parklab/HiTea/archive/{{ version }}.tar.gz
+  md5: 3350fc62b05a76470823060f450f9c65
+
+build:
+  number: 0
+  noarch: python
+
+requirements:
+  host:
+    - bedtools ==2.27.1
+    - samtools
+    - perl
+    - bwa
+    - pairtools
+    - parallel
+    - r-base
+    - r-ggplot2
+    - r-data.table
+    - r-mass
+    - bioconductor-genomicranges
+    - r-rcolorbrewer
+    - r-knitr
+    - r-rmarkdown
+    - r-kableextra
+    - r-dt
+    - r-circlize
+    - bioconductor-enrichedheatmap
+    - pandoc
+
+  run:
+    - bedtools ==2.27.1
+    - samtools
+    - perl
+    - bwa
+    - pairtools
+    - parallel
+    - r-base
+    - r-ggplot2
+    - r-data.table
+    - r-mass
+    - bioconductor-genomicranges
+    - r-rcolorbrewer
+    - r-knitr
+    - r-rmarkdown
+    - r-kableextra
+    - r-dt
+    - r-circlize
+    - bioconductor-enrichedheatmap
+    - pandoc
+
+test:
+  commands:
+    - bedtools --version
+    - samtools --version
+    - perl --version
+    - R --version
+    - python --version
+    - pairtools parse --help
+    - hitea
+    - bwa
+
+about:
+  home: https://github.com/parklab/HiTea
+  license: MIT
+  license_file: "LICENSE.txt"
+  summary: computational tool to identify trasposable element insertions using Hi-C data
+  license_family: MIT
