@@ -90,11 +90,15 @@ Running HiTEA on a list of input bam files of a single experiment
 hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -e 'MboI' -r 'T'
 ```
 
+# Codes for analyses
+- Codes used for analyzing the data and preparing figures for manuscript are located here: 
+https://github.com/dhawalsjain/HiTea_Analyses
+
 
 References:
-1. Quinlan, A. R. & Hall, I. M. BEDTools: A flexible suite of utilities for comparing genomic features. Bioinformatics (2010). doi:10.1093/bioinformatics/btq033
-2. Tange, O. GNU Parallel: The Command-Line Power Tool. ;login: (2011)
-3. Gu, Z., Eils, R., Schlesner, M. & Ishaque, N. EnrichedHeatmap: An R/Bioconductor package for comprehensive visualization of genomic signal associations. BMC Genomics (2018). doi:10.1186/s12864-018-4625-x
-4. Lee, E. et al. Landscape of Somatic Retrotransposition in Human Cancers. 1–7 (2012). doi:10.1038/nrg2072
-5. Gardner, E. J. et al. The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res. (2017). doi:10.1101/gr.218032.116
-6. Jurka, J. et al. Repbase Update, a database of eukaryotic repetitive elements. Cytogenet. Genome Res. (2005). doi:10.1159/000084979
+1. Quinlan,A.R. and Hall,I.M. (2010) BEDTools: A flexible suite of utilities for comparing genomic features. Bioinformatics, 26, 841–842
+2. Tange,O. (2011) GNU Parallel: The Command-Line Power Tool. USENIX Mag., 36, 42–47
+3. Gu,Z. et al. (2018) EnrichedHeatmap: An R/Bioconductor package for comprehensive visualization of genomic signal associations. BMC Genomics, 19, 234
+4. Lee,E. et al. (2012) Landscape of somatic retrotransposition in human cancers. Science (80-.). doi:10.1038/nrg2072
+5. Gardner,E.J. et al. (2017) The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res., 27, 1916–1929. doi:10.1101/gr.218032.116
+6. Bao,W. et al. (2015) Repbase Update, a database of repetitive elements in eukaryotic genomes. Mob. DNA, 6:11
