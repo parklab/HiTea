@@ -6,18 +6,6 @@ computational tool to identify trasposable element insertions using Hi-C data
 
 HiTea (Hi-C based Transposable Element Analyzer) is geared to idenify non-reference transposable elemenet insertions from the Hi-C data. It uses split Hi-C read information and read coverage to detect insertions of three major classes of active human transposable elements (TE) - Alu (SINE), L1HS(LINE) and SVA. 
 
-- Dependancies:
-  - PERL(≥v5.24)
-  - R(≥v3.2)
-  - bedtools(≥v2.26) (ref-1)
-  - samtools(≥v1.7)
-  - GNU-parallel [https://www.gnu.org/software/parallel/] (ref-2)
-  - Pairtools [https://github.com/mirnylab/pairtools]
-  - Following R packages are required for computation
-    - GenomicRanges, data.table, MASS
-  - Following optional R packages are required for HTML report generation
-    - rmarkdown, knitr, EnrichedHeatmap (ref-3), circlize
- 
  - Required inputs:
 HiTtea requires following reference data files during the run.  
    - TE-family consensus                = TE-family consensus sequences in fasta format. These sequences can be derived from literature or by performing multiple sequence alignment of highly variable sequences of a TE-family in the human genome. In addition, we use a PolyA fasta entry in this file to score for TPRT-mediated polyA/T tails on the non-reference TE-insertion (ref-4). HiTea uses TE-family consensus sequences for Alu, L1Hs and SVA from an earlier study (ref-5).  
@@ -90,7 +78,36 @@ Running HiTEA on a list of input bam files of a single experiment
 hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -e 'MboI' -r 'T'
 ```
 
-# Codes for analyses
+# Installation
+- Dependancies:
+  - PERL(≥v5.24)
+  - R(≥v3.2)
+  - bedtools(≥v2.26) (ref-1)
+  - samtools(≥v1.7)
+  - GNU-parallel [https://www.gnu.org/software/parallel/] (ref-2)
+  - Pairtools [https://github.com/mirnylab/pairtools]
+  - Following R packages are required for computation
+    - GenomicRanges, data.table, MASS
+  - Following optional R packages are required for HTML report generation
+    - rmarkdown, knitr, EnrichedHeatmap (ref-3), circlize
+ 
+ - HiTea can be installed in following three ways:
+ 
+- 1) By setting up the environment:
+    - Once the dependancies are installed, the HiTea package can be installed simply by downloading it and setting the path variable to the HiTea directory. 
+
+- 2) Docker image: 
+    - HiTea docker image is available through 4DN DCIC DockerHub repo (4dndcic/hitea:v1)
+
+- 3) Conda package:
+    - Additionally, HiTea is available through bioconda. 
+    - Highly recommended option to run HiTea on local machines
+```
+conda install -c bioconda hitea
+```
+
+
+# Codes used for analyses
 - Codes used for analyzing the data and preparing figures for manuscript are located here: 
 https://github.com/dhawalsjain/HiTea_Analyses
 
