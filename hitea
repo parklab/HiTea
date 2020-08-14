@@ -77,12 +77,12 @@ if [[ -z $genome && -z $index && -z $bgAnnotations && -z $repbase ]]; then
     printHelpAndExit 0
 fi
 
-## get the source directory (adopted script)
+## get the source directory
 SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do 
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
   SOURCE="$(readlink "$SOURCE")"
-  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
 done
 DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
@@ -94,7 +94,7 @@ if [[ $genome == "hg38" ]]; then
 elif [[ $genome == "hg19" ]]; then
     index=${DIR}/hg19/TEConsensus_Hs.fa
     repbase=${DIR}/hg19/Repbase_Hs.fa
-    bgAnnotations=${DIR}/hg19/bgRepeats_hg38.bed.gz
+    bgAnnotations=${DIR}/hg19/bgRepeats_hg19.bed.gz
     indexP=${DIR}/hg19/Polymorphs_Hs.fa
 fi
 
@@ -119,7 +119,12 @@ if ! [[ -e $paramlog ]]; then
   echo "No parameter file was printed"
   exit 1
 fi
-readlength=`samtools view $inputs[0] | head -n 100 | cut -f10 | awk '{ sum += length($0)} END { if (NR > 0) print sum / NR; }'`
+
+
+## Read length, use the last file
+for input in $inputs; do
+    readlength=`samtools view $input | head -n 100 | cut -f10 | awk '{ sum += length($0)} END { if (NR > 0) print sum / NR; }'`
+done
 
 echo ""
 echo ""
