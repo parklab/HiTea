@@ -87,10 +87,10 @@ ENV LANG=C.UTF-8
 RUN apt-get autoclean && apt-get clean
 RUN rm samtools-1.7.tar.bz2 && rm v0.7.17.tar.gz
 
-# hitea 0.1.4
-RUN wget https://github.com/parklab/HiTea/archive/0.1.4.tar.gz \
-        && tar -xzf 0.1.4.tar.gz \
-        && rm 0.1.4.tar.gz    
+# hitea 0.1.5
+RUN wget https://github.com/parklab/HiTea/archive/0.1.5.tar.gz \
+        && tar -xzf 0.1.5.tar.gz \
+        && rm 0.1.5.tar.gz    
 
 
 # Copy script and data directory
