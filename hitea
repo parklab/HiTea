@@ -155,7 +155,7 @@ if [[ "$tot_threads" -gt 8 ]]; then
 fi
 echo " -threads (used)      $tot_threads" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
-echo "command: hitea -p $ncores -m $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
+echo "command: hitea -p $ncores -e $enzyme -q $anchor_mapq -o $outprefix -s $clip -g $genome -w $workdir -i $inputs"  | tee -a $paramlog 
 echo " sourceDirectory      $DIR" | tee -a $paramlog 
 echo "" | tee -a $paramlog 
 echo "" | tee -a $paramlog  
