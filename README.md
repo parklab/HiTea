@@ -78,6 +78,8 @@ Running HiTEA on a list of input bam files of a single experiment
 hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM12878_test -o gm12878 -g hg38 -e 'MboI' -r 'T'
 ```
 
+Note: In order to generate the final HTML report, please make sure that the working directory path as specified using -w option, is complete. Hence, instead of `-w test_out` use `-w /full-path-to/test_out`.
+
 # Installation
 - Dependancies:
   - PERL(≥v5.24)
