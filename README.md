@@ -98,6 +98,39 @@ hitea -i 'bam/4DNFPC275NK8.bam bam/4DNFIJ275PQ9.bam bam/4DNFIC275HT2.bam' -w GM1
 
 - 2) Docker image: 
     - HiTea docker image is available through 4DN DCIC DockerHub repo (4dndcic/hitea:v1)
+    - pull the docker image and run in an interactive mode
+    - You can also use --volume option to bind the data folder to the docker container
+    - Once available inside the container, the files in the data folder can be accessed through data directory
+```
+docker pull 4dndcic/hitea:v1
+docker run -it 4dndcic/hitea:v1 --volume /your-data-folder-path:/data bash
+$ hitea --help
+$ hitea
+****No input provided
+
+
+Usage: hitea [-w workdir] [-e enzyme] [-q anchor_mapq] [-o outprefix] [-s clip] [-g genome] [-r remap] [-n index] [-b repbase] [-p indexP] [-a anno] [-h help] -i inputs (space separated psam/bam in inverted commas)
+
+Required****
+    -i inputs :          Input file in pairsam format or unsorted-lossless bam format
+    -e enzyme :          Restriction endunuclease used for the assay (default: '', available:MboI,DpnII,HindIII,Arima,NcoI,NotI)
+    -g genome :          Genome build to be used (default:hg38, available: hg19)
+
+Optional
+  (following 4 parameters are optional if -g is specified)
+    -n index :           fasta format file for TE-consensus sequences
+    -b repbase :         fasta format file for Repbase subfamily sequences
+    -p indexP :          fasta format file for Polymorphic sequences (header should be Family~name format) (optional)
+    -a anno :            reference-genome copies for TE-family members
+
+    -o outprefix :       Output prefix while generating report files (default: project)
+    -w workdir:          Working directory where the files are to be written
+    -q anchor_mapq :     Mapping quality threshold for repeat anchored mate on the reference genome (default: 28)
+    -s clip :            Minimum clip length for detecting insertion (should be >=13bp) (default: 20)
+    -r remap :           whether to remap unmapped clipped reads to the polymoprhic sequences (default:F, if T, -p needs to be specified)
+    -h help :            Display help message
+
+```
 
 - 3) Conda package:
     - Additionally, HiTea is available through bioconda. 
@@ -116,6 +149,6 @@ References:
 1. Quinlan,A.R. and Hall,I.M. (2010) BEDTools: A flexible suite of utilities for comparing genomic features. Bioinformatics, 26, 841–842
 2. Tange,O. (2011) GNU Parallel: The Command-Line Power Tool. USENIX Mag., 36, 42–47
 3. Gu,Z. et al. (2018) EnrichedHeatmap: An R/Bioconductor package for comprehensive visualization of genomic signal associations. BMC Genomics, 19, 234
-4. Lee,E. et al. (2012) Landscape of somatic retrotransposition in human cancers. Science (80-.). doi:10.1038/nrg2072
+4. Lee,E. et al. (2012) Landscape of somatic retrotransposition in human cancers. Science, 337, 967–971. doi:10.1038/nrg2072
 5. Gardner,E.J. et al. (2017) The mobile element locator tool (MELT): Population-scale mobile element discovery and biology. Genome Res., 27, 1916–1929. doi:10.1101/gr.218032.116
 6. Bao,W. et al. (2015) Repbase Update, a database of repetitive elements in eukaryotic genomes. Mob. DNA, 6:11
