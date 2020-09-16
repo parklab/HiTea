@@ -136,6 +136,8 @@ Optional
     - Additionally, HiTea is available through bioconda. 
     - Highly recommended option to run HiTea on local machines
 ```
+conda config --add channels conda-forge
+conda config --add channels bioconda
 conda install -c bioconda hitea
 ```
 
