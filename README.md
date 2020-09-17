@@ -99,13 +99,13 @@ Note: In order to generate the final HTML report, please make sure that the work
     - Once the dependancies are installed, the HiTea package can be installed simply by downloading it and setting the path variable to the HiTea directory. 
 
 - 2) Docker image: 
-    - HiTea docker image is available through 4DN DCIC DockerHub repo (4dndcic/hitea:v1)
+    - HiTea docker image is available through 4DN DCIC DockerHub repo (4dndcic/hitea:v2)
     - pull the docker image and run in an interactive mode
     - You can also use --volume option to bind the data folder to the docker container
     - Once available inside the container, the files in the data folder can be accessed through data directory
 ```
-docker pull 4dndcic/hitea:v1
-docker run -it 4dndcic/hitea:v1 --volume /your-data-folder-path:/data bash
+docker pull 4dndcic/hitea:v2
+docker run -it 4dndcic/hitea:v2 --volume /your-data-folder-path:/data bash
 $ hitea --help
 $ hitea
 ****No input provided
